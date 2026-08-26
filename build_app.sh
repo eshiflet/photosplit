@@ -77,4 +77,12 @@ chmod +x "$app/Contents/MacOS/Photosplit"
 
 codesign --force --deep --sign - "$app" >/dev/null 2>&1 || true
 touch "$app"
+
+# Build the interface once inside the finished bundle. Running the same code
+# from a script does not prove it works here: the bundle has its own identity,
+# and that alone has broken the app before.
+if ! "$app/Contents/MacOS/Photosplit" --self-test; then
+	echo "build failed: the app does not start from inside its bundle" >&2
+	exit 1
+fi
 echo "built $app"

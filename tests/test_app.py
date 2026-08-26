@@ -22,7 +22,7 @@ from AppKit import (
     NSColor,
     NSPopUpButton,
 )
-from Foundation import NSUserDefaults
+from Foundation import NSBundle, NSUserDefaults
 
 from photosplit.app import AppDelegate, PreferencesWindow
 from photosplit.prefs import (
@@ -201,6 +201,20 @@ class SplitPathTest(AppTestCase):
         self.delegate._run_split([self.scan], source="scanned", dpi=300)
         run_loop_until(lambda: not self.delegate.busy, 60.0)
         self.assertTrue(self.scan.exists())
+
+
+class PreferencesStoreTest(AppTestCase):
+    def test_a_suite_named_after_the_running_bundle_still_works(self) -> None:
+        """Inside Photosplit.app the suite name and the bundle id are the same.
+
+        macOS refuses that pairing and hands back nil, which crashed the app on
+        launch while every script-run test passed.
+        """
+        identifier = NSBundle.mainBundle().bundleIdentifier()
+        self.assertTrue(identifier, "no bundle identifier to test against")
+        prefs = prefs_module.Prefs(suite=identifier)
+        self.assertIsNotNone(prefs._store)
+        self.assertEqual(int(prefs["resolution"]), prefs_module.DEFAULTS["resolution"])
 
 
 class PreferencesTest(AppTestCase):

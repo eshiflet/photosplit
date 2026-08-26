@@ -7,6 +7,7 @@ stays a single keystroke.
 
 from __future__ import annotations
 
+import sys
 import tempfile
 import threading
 import traceback
@@ -573,7 +574,28 @@ class PreferencesWindow(NSObject):
             self.owner._refresh_folder_label()
 
 
+def self_test() -> int:
+    """Build the whole interface once and exit.
+
+    Run from inside the built bundle, this catches the failures that only
+    happen there — a bundle identifier clashing with the preferences suite
+    being the one that shipped broken.
+    """
+    NSApplication.sharedApplication()
+    delegate = AppDelegate.alloc().init()
+    delegate._build_menu()
+    delegate._build_window()
+    delegate.prefs_window = None
+    PreferencesWindow.alloc().initWithPrefs_owner_(delegate.prefs, delegate)
+    identifier = __import__("Foundation").NSBundle.mainBundle().bundleIdentifier()
+    print(f"self-test ok — bundle {identifier}, saving to {delegate.prefs.output_folder}")
+    return 0
+
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return self_test()
+
     app = NSApplication.sharedApplication()
     app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
     delegate = AppDelegate.alloc().init()

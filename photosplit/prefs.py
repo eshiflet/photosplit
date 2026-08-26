@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from Foundation import NSUserDefaults
+from Foundation import NSBundle, NSUserDefaults
 
 SUITE = "com.ericshiflet.photosplit"
 
@@ -38,6 +38,22 @@ QUALITY_LABELS = [
 ]
 
 
+def _open(suite: str) -> NSUserDefaults:
+    """The defaults store for a suite name.
+
+    A suite that matches the running app's own bundle identifier is refused by
+    macOS and comes back nil — which is exactly the case inside Photosplit.app,
+    and exactly the case that never arises when running from a script. The
+    app's own identifier is what standardUserDefaults already is, so use that.
+    """
+    identifier = NSBundle.mainBundle().bundleIdentifier()
+    if identifier and suite == identifier:
+        return NSUserDefaults.standardUserDefaults()
+    return NSUserDefaults.alloc().initWithSuiteName_(suite) or (
+        NSUserDefaults.standardUserDefaults()
+    )
+
+
 class Prefs:
     """Thin typed wrapper so the rest of the app never touches raw defaults."""
 
@@ -45,7 +61,7 @@ class Prefs:
         # Read SUITE at call time, not at import: the tests point this at a
         # throwaway domain so that running them cannot rewrite real settings.
         self._suite = suite or SUITE
-        self._store = NSUserDefaults.alloc().initWithSuiteName_(self._suite)
+        self._store = _open(self._suite)
         self._store.registerDefaults_(DEFAULTS)
 
     def __getitem__(self, key: str):
