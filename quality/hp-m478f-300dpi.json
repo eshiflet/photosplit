@@ -1,0 +1,22 @@
+[
+  {
+    "scan": "2026-08-26-125754.tiff",
+    "dpi": 300.0,
+    "photos": 6,
+    "lid_rgb": [
+      253.4,
+      253.6,
+      252.8
+    ],
+    "lid_cast": 0.73,
+    "lid_noise": 1.443,
+    "edge_rise_um": 169.3,
+    "edges_measured": 19,
+    "luma_p1": 0.0,
+    "luma_p99": 246.3,
+    "clipped_black_pct": 3.89,
+    "clipped_white_pct": 0.236,
+    "saturation": 105.4,
+    "shadow_noise": 5.63
+  }
+]

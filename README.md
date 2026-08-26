@@ -81,6 +81,21 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | A white border got shaved off | Trim leftover background: off | `--no-trim` |
 | Crops look slightly rotated | Straighten: off | `--no-deskew` |
 
+## Comparing two scanners
+
+`tools/scan_quality.py` measures a full-bed scan so the same photos can be run
+through two scanners and the results diffed:
+
+```bash
+.venv/bin/python tools/scan_quality.py "~/Pictures/Photosplit/Full Scans/"*.tiff
+```
+
+It reports colour neutrality, noise, edge sharpness, and how much tonal range
+survives — all measured off the prints and the lid, so the numbers do not
+depend on what the photographs contain. It cannot measure absolute colour
+accuracy; that needs a reference target (IT8 or ColorChecker) on the glass.
+Baselines live in `quality/`.
+
 ## Layout
 
 | File | What it does |
@@ -93,6 +108,7 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | `photosplit/prefs.py` | Settings, stored in NSUserDefaults |
 | `photosplit/cli.py` | The `photosplit` command |
 | `build_app.sh` | Assembles `Photosplit.app` |
+| `tools/scan_quality.py` | Measures a scan, for comparing scanners |
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .
