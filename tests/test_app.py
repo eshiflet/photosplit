@@ -203,6 +203,81 @@ class SplitPathTest(AppTestCase):
         self.assertTrue(self.scan.exists())
 
 
+def every_button(view) -> list:
+    found = []
+    for sub in view.subviews():
+        if isinstance(sub, NSButton):
+            found.append(sub)
+        found += every_button(sub)
+    return found
+
+
+class ControlsTest(AppTestCase):
+    """Press everything the user can press."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.delegate = build_delegate()
+        self.delegate.prefs_window = None
+
+    def test_every_button_is_wired_to_something_that_answers(self) -> None:
+        self.delegate.showPreferences_(None)
+        windows = [self.delegate.window, self.delegate.prefs_window.window]
+        buttons = [b for w in windows for b in every_button(w.contentView())]
+        self.assertGreaterEqual(len(buttons), 8)
+        for button in buttons:
+            action = button.action()
+            self.assertIsNotNone(action, "a button with no action")
+            target = button.target()
+            self.assertIsNotNone(target, f"{button.title()} has no target")
+            self.assertTrue(
+                target.respondsToSelector_(action),
+                f"{button.title()} points at {action}, which its target does not implement",
+            )
+
+    def test_choosing_a_scanner_remembers_it_immediately(self) -> None:
+        self.delegate._devices_changed(
+            [FakeDevice("EPSON Perfection V500"), FakeDevice("HP Color LaserJet")]
+        )
+        self.delegate.device_popup.selectItemAtIndex_(1)
+        self.delegate.deviceChanged_(None)
+        self.assertEqual(str(self.delegate.prefs["scannerName"]), "HP Color LaserJet")
+
+    def test_windows_are_not_freed_when_closed(self) -> None:
+        # AppKit releases a window like these on close by default, leaving the
+        # Python reference dangling; the next button press then crashes inside
+        # object_getClass, with no Python traceback to show for it.
+        self.delegate.showPreferences_(None)
+        for window in (self.delegate.window, self.delegate.prefs_window.window):
+            self.assertFalse(window.isReleasedWhenClosed())
+
+    def test_preferences_survives_close_and_reopen(self) -> None:
+        self.delegate.showPreferences_(None)
+        window = self.delegate.prefs_window.window
+        self.assertFalse(window.isReleasedWhenClosed(), "reopening would touch freed memory")
+        window.close()
+        self.delegate.showPreferences_(None)
+        self.assertTrue(self.delegate.prefs_window.window.isVisible())
+        self.delegate.prefs_window.window.close()
+
+    def test_refresh_replaces_the_browser_rather_than_restarting_it(self) -> None:
+        self.delegate._start_browsing()
+        first = self.delegate.hub
+        self.delegate.refresh_(None)
+        self.assertIsNot(self.delegate.hub, first)
+        self.assertEqual(self.delegate.devices, [])
+        self.delegate.hub.stop()
+
+    def test_refresh_is_ignored_mid_scan(self) -> None:
+        self.delegate._start_browsing()
+        hub = self.delegate.hub
+        self.delegate._set_busy(True, "Scanning…")
+        self.delegate.refresh_(None)
+        self.assertIs(self.delegate.hub, hub, "must not drop the browser during a scan")
+        self.delegate._set_busy(False, "")
+        hub.stop()
+
+
 class PreferencesStoreTest(AppTestCase):
     def test_a_suite_named_after_the_running_bundle_still_works(self) -> None:
         """Inside Photosplit.app the suite name and the bundle id are the same.

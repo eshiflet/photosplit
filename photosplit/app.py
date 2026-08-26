@@ -96,10 +96,7 @@ class AppDelegate(NSObject):
         self._build_menu()
         self._build_window()
         self.prefs_window = None
-        self.hub = ScannerHub.alloc().initWithCallback_(
-            lambda devices: on_main(self._devices_changed, devices)
-        )
-        self.hub.start()
+        self._start_browsing()
         self._log(f"Photosplit {__version__} — looking for a scanner…")
         self._log(f"Saving to {self.prefs.output_folder}")
         self._refresh_footer()
@@ -124,6 +121,10 @@ class AppDelegate(NSObject):
             NSMakeRect(0, 0, 520, 470), WINDOW_STYLE, NSBackingStoreBuffered, False
         )
         self.window.setTitle_("Photosplit")
+        # A window made this way is released the moment it is closed, which
+        # leaves the Python reference dangling and crashes the next button
+        # press. This object outlives its window's visibility.
+        self.window.setReleasedWhenClosed_(False)
         self.window.center()
         view = self.window.contentView()
 
@@ -133,6 +134,8 @@ class AppDelegate(NSObject):
         )
         self.device_popup.addItemWithTitle_("Looking for scanners…")
         self.device_popup.setEnabled_(False)
+        self.device_popup.setTarget_(self)
+        self.device_popup.setAction_("deviceChanged:")
         view.addSubview_(self.device_popup)
 
         refresh = NSButton.alloc().initWithFrame_(NSMakeRect(416, 418, 80, 28))
@@ -235,10 +238,32 @@ class AppDelegate(NSObject):
             self.device_popup.selectItemAtIndex_(names.index(remembered))
         self._log(f"Ready: {self.device_popup.titleOfSelectedItem()}")
 
-    def refresh_(self, sender) -> None:
-        self.hub.stop()
+    @objc.python_method
+    def _start_browsing(self) -> None:
+        """Begin device discovery, replacing any previous browser.
+
+        A browser that has been stopped is not restartable, and the device
+        objects it produced belong to it, so both are dropped together.
+        """
+        if self.hub is not None:
+            self.hub.stop()
+        self.devices = []
+        self.hub = ScannerHub.alloc().initWithCallback_(
+            lambda devices: on_main(self._devices_changed, devices)
+        )
         self.hub.start()
-        self._log("Rescanning for devices…")
+
+    def deviceChanged_(self, sender) -> None:
+        """Remember the chosen scanner as soon as it is chosen."""
+        index = self.device_popup.indexOfSelectedItem()
+        if 0 <= index < len(self.devices):
+            self.prefs["scannerName"] = self.devices[index].name()
+
+    def refresh_(self, sender) -> None:
+        if self.busy:
+            return
+        self._start_browsing()
+        self._log("Looking for scanners again…")
 
     # -- the one button ----------------------------------------------------
     def scan_(self, sender) -> None:
@@ -429,6 +454,7 @@ class PreferencesWindow(NSObject):
             NSMakeRect(0, 0, 480, 420), WINDOW_STYLE, NSBackingStoreBuffered, False
         )
         self.window.setTitle_("Photosplit Preferences")
+        self.window.setReleasedWhenClosed_(False)
         self.window.center()
         view = self.window.contentView()
 
