@@ -1,0 +1,44 @@
+[
+  {
+    "scan": "epson-600.tiff",
+    "dpi": 600.0,
+    "photos": 5,
+    "lid_rgb": [
+      239.8,
+      243.2,
+      244.6
+    ],
+    "lid_cast": 4.78,
+    "lid_noise": 2.9,
+    "edge_rise_um": 296.3,
+    "edge_rise_px": 7.0,
+    "edges_measured": 13,
+    "luma_p1": 33.7,
+    "luma_p99": 205.6,
+    "clipped_black_pct": 0.0,
+    "clipped_white_pct": 0.0,
+    "saturation": 73.9,
+    "shadow_noise": 4.06
+  },
+  {
+    "scan": "epson-1200.tiff",
+    "dpi": 1200.0,
+    "photos": 5,
+    "lid_rgb": [
+      237.4,
+      241.8,
+      244.4
+    ],
+    "lid_cast": 6.91,
+    "lid_noise": 2.898,
+    "edge_rise_um": 275.2,
+    "edge_rise_px": 13.0,
+    "edges_measured": 13,
+    "luma_p1": 35.1,
+    "luma_p99": 204.9,
+    "clipped_black_pct": 0.0,
+    "clipped_white_pct": 0.0,
+    "saturation": 72.2,
+    "shadow_noise": 4.02
+  }
+]

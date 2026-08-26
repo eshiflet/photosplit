@@ -4,3 +4,4 @@ __pycache__/
 tests/data/
 Photosplit.app/
 .DS_Store
+quality/scans/
