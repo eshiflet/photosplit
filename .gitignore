@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 tests/data/
 Photosplit.app/
+.DS_Store
