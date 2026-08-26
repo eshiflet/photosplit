@@ -8,4 +8,7 @@ while [ -L "$src" ]; do
   case $src in /*) ;; *) src=$dir/$src ;; esac
 done
 here=$(cd -P -- "$(dirname -- "$src")/.." && pwd)
+# -m needs the repo on sys.path, and cwd is wherever the user happens to be.
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
 exec "$here/.venv/bin/python" -m photosplit "$@"
