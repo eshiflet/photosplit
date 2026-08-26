@@ -16,6 +16,13 @@ SEPARATED = [
     (5.0, 3.5, 0.30, 6.80, False, 0.0),
     (2.5, 3.5, 5.60, 6.90, True, 3.2),
 ]
+# Prints laid over the edge of the glass, which is what poisons any attempt to
+# read the lid colour off a border ring. Taken from a real scan that failed.
+BLEEDING = [
+    (6.0, 4.0, -0.60, 0.20, False, 0.0),
+    (3.5, 5.0, 5.40, 0.30, True, 0.0),
+    (5.0, 3.5, 0.30, 8.30, False, 0.0),
+]
 # Photos butted right up against each other, the hard case.
 TOUCHING = [
     (4.0, 6.0, 0.40, 0.40, False, 0.0),
@@ -61,7 +68,11 @@ def make(path: Path, layout=SEPARATED, dpi: int = 300, seed: int = 7, bg: int = 
         )
 
         y, x = int(y_in * dpi) - pad, int(x_in * dpi) - pad
-        y, x = max(0, y), max(0, x)
+        # A print may hang off the glass; clip the part that misses the bed.
+        if y < 0:
+            canvas, y = canvas[-y:], 0
+        if x < 0:
+            canvas, x = canvas[:, -x:], 0
         region = scan[y : y + canvas.shape[0], x : x + canvas.shape[1]]
         piece = canvas[: region.shape[0], : region.shape[1]]
         drawn = np.abs(piece.astype(int) - bg).max(2, keepdims=True) > 3
@@ -88,5 +99,7 @@ def make(path: Path, layout=SEPARATED, dpi: int = 300, seed: int = 7, bg: int = 
 
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "tests/data/scan.png")
-    layout = TOUCHING if "tight" in out.stem else SEPARATED
+    layout = {"tight": TOUCHING, "bleed": BLEEDING}.get(
+        out.stem.split("-")[-1], SEPARATED
+    )
     print(f"wrote {out} with {len(make(out, layout))} photos")

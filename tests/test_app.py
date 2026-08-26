@@ -7,7 +7,9 @@ exists, is wired to an action, and stays readable in dark mode.
 
 from __future__ import annotations
 
+import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 from AppKit import (
@@ -20,13 +22,31 @@ from AppKit import (
     NSColor,
     NSPopUpButton,
 )
+from Foundation import NSUserDefaults
 
 from photosplit.app import AppDelegate, PreferencesWindow
 from photosplit.prefs import FORMATS, RESOLUTIONS
+from photosplit.scanner import run_loop_until
+from tests.make_scan import SEPARATED, make
+
+from photosplit import prefs as prefs_module
 
 NSApplication.sharedApplication().setActivationPolicy_(
     NSApplicationActivationPolicyAccessory
 )
+
+_REAL_SUITE = prefs_module.SUITE
+_TEST_SUITE = f"com.ericshiflet.photosplit.tests.{uuid.uuid4().hex}"
+
+
+def setUpModule() -> None:
+    """Never let a test run rewrite the settings of the installed app."""
+    prefs_module.SUITE = _TEST_SUITE
+
+
+def tearDownModule() -> None:
+    prefs_module.SUITE = _REAL_SUITE
+    NSUserDefaults.standardUserDefaults().removePersistentDomainForName_(_TEST_SUITE)
 
 
 class FakeDevice:
@@ -66,8 +86,16 @@ def luminance(color: NSColor, appearance_name: str) -> float:
     return resolved["value"]
 
 
-class WindowTest(unittest.TestCase):
+class AppTestCase(unittest.TestCase):
+    """Every test starts from stock preferences, whatever ran before it."""
+
     def setUp(self) -> None:
+        NSUserDefaults.standardUserDefaults().removePersistentDomainForName_(_TEST_SUITE)
+
+
+class WindowTest(AppTestCase):
+    def setUp(self) -> None:
+        super().setUp()
         self.delegate = build_delegate()
 
     def test_window_exists_with_a_scan_button_bound_to_an_action(self) -> None:
@@ -123,8 +151,55 @@ class WindowTest(unittest.TestCase):
         self.assertIn("first\nsecond", str(self.delegate.log_view.string()))
 
 
-class PreferencesTest(unittest.TestCase):
+class SplitPathTest(AppTestCase):
+    """The work the Scan button kicks off, minus the scanner itself.
+
+    Splitting runs on a background thread and reports back through the main
+    queue, so this drives a real run loop rather than asserting on the calls.
+    """
+
     def setUp(self) -> None:
+        super().setUp()
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-app-"))
+        self.scan = self.dir / "bench.png"
+        make(self.scan, SEPARATED)
+        self.delegate = build_delegate()
+        self.delegate.prefs["outputFolder"] = str(self.dir / "out")
+
+    def test_dropped_scan_is_split_into_files_and_the_original_kept(self) -> None:
+        self.delegate._run_split([self.scan], source="dropped", dpi=300)
+        finished = run_loop_until(lambda: not self.delegate.busy, 60.0)
+
+        self.assertTrue(finished, "split never finished")
+        written = sorted((self.dir / "out").glob("bench-*.jpg"))
+        self.assertEqual(len(written), 4)
+        self.assertTrue(self.scan.exists(), "a dropped file must not be deleted")
+        self.assertIn("4 photo(s)", self.delegate.status.stringValue())
+
+    def test_the_log_names_every_file_it_wrote(self) -> None:
+        self.delegate._run_split([self.scan], source="dropped", dpi=300)
+        run_loop_until(lambda: not self.delegate.busy, 60.0)
+        log = str(self.delegate.log_view.string())
+        for index in range(1, 5):
+            self.assertIn(f"bench-{index:02d}.jpg", log)
+
+    def test_a_scanned_file_is_discarded_once_split(self) -> None:
+        self.delegate.prefs["keepFullScan"] = False
+        self.delegate._run_split([self.scan], source="scanned", dpi=300)
+        run_loop_until(lambda: not self.delegate.busy, 60.0)
+        self.assertFalse(self.scan.exists(), "the temporary full scan should be gone")
+        self.assertEqual(len(list((self.dir / "out").glob("bench-*.jpg"))), 4)
+
+    def test_keeping_the_full_scan_leaves_it_alone(self) -> None:
+        self.delegate.prefs["keepFullScan"] = True
+        self.delegate._run_split([self.scan], source="scanned", dpi=300)
+        run_loop_until(lambda: not self.delegate.busy, 60.0)
+        self.assertTrue(self.scan.exists())
+
+
+class PreferencesTest(AppTestCase):
+    def setUp(self) -> None:
+        super().setUp()
         self.delegate = build_delegate()
         self.prefs_window = PreferencesWindow.alloc().initWithPrefs_owner_(
             self.delegate.prefs, self.delegate

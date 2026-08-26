@@ -30,8 +30,11 @@ RESOLUTIONS = [150, 200, 300, 400, 600, 1200]
 class Prefs:
     """Thin typed wrapper so the rest of the app never touches raw defaults."""
 
-    def __init__(self) -> None:
-        self._store = NSUserDefaults.alloc().initWithSuiteName_(SUITE)
+    def __init__(self, suite: str | None = None) -> None:
+        # Read SUITE at call time, not at import: the tests point this at a
+        # throwaway domain so that running them cannot rewrite real settings.
+        self._suite = suite or SUITE
+        self._store = NSUserDefaults.alloc().initWithSuiteName_(self._suite)
         self._store.registerDefaults_(DEFAULTS)
 
     def __getitem__(self, key: str):

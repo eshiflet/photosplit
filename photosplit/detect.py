@@ -32,26 +32,61 @@ class Photo:
         return int(np.floor(x0)), int(np.floor(y0)), int(np.ceil(x1)), int(np.ceil(y1))
 
 
-def background_color(bgr: np.ndarray, border: float = 0.02) -> np.ndarray:
-    """Median colour of a thin ring around the scan, i.e. the scanner lid."""
-    h, w = bgr.shape[:2]
-    b = max(2, int(round(min(h, w) * border)))
-    ring = np.concatenate(
-        [
-            bgr[:b].reshape(-1, 3),
-            bgr[-b:].reshape(-1, 3),
-            bgr[:, :b].reshape(-1, 3),
-            bgr[:, -b:].reshape(-1, 3),
-        ]
+def background_color(bgr: np.ndarray, sample_edge: int = 800) -> np.ndarray:
+    """The colour of the scanner lid.
+
+    Sampling a border ring is tempting and wrong: photos are routinely laid
+    right up to the edge of the glass, or hanging off it, which poisons the
+    ring with photo content. Instead take the most common colour among the
+    scan's *flat* pixels. The lid is one uniform expanse, so it wins the vote
+    even when prints cover most of the bed, and nothing is assumed about
+    whether that expanse is white or black.
+    """
+    scale = min(1.0, sample_edge / max(bgr.shape[:2]))
+    small = (
+        cv2.resize(bgr, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if scale < 1.0
+        else bgr
     )
-    return np.median(ring, axis=0)
+    blur = cv2.GaussianBlur(small, (0, 0), 1.2)
+    gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
+    grad = cv2.magnitude(
+        cv2.Scharr(gray, cv2.CV_32F, 1, 0), cv2.Scharr(gray, cv2.CV_32F, 0, 1)
+    )
+    flat = blur[grad <= np.percentile(grad, 35)].reshape(-1, 3)
+    if flat.shape[0] < 100:
+        return np.median(small.reshape(-1, 3), axis=0)
+
+    step = 16
+    coarse = (flat // step).astype(np.int32)
+    keys = coarse[:, 0] * 256 + coarse[:, 1] * 16 + coarse[:, 2]
+    winner = int(np.bincount(keys, minlength=4096).argmax())
+    centre = np.array(
+        [winner // 256, (winner // 16) % 16, winner % 16], dtype=np.float64
+    ) * step + step / 2
+    near = flat[np.abs(flat.astype(np.int16) - centre).max(axis=1) <= step]
+    return np.median(near if near.size else flat, axis=0)
+
+
+def background_tolerance(bgr: np.ndarray, bg: np.ndarray) -> float:
+    """How far a pixel must stray from the lid colour to count as photo.
+
+    Measured from how much the lid itself varies, floored so a very clean scan
+    does not end up with a hair-trigger that treats dust as art, and capped so
+    a noisy one does not swallow dark prints.
+    """
+    diff = np.abs(bgr.astype(np.int16) - bg.astype(np.int16)).max(axis=2)
+    lid = diff[diff <= 24]
+    if lid.size < 100:
+        return 24.0
+    return float(min(40.0, max(8.0, np.percentile(lid, 99) * 1.5)))
 
 
 def foreground_mask(
     bgr: np.ndarray,
     bg: np.ndarray,
     dpi_scaled: float,
-    colour_tol: int | None = None,
+    colour_tol: float | None = None,
     edge_tol: float | None = None,
 ) -> np.ndarray:
     """Pixels that are not scanner background.
@@ -66,7 +101,7 @@ def foreground_mask(
 
     diff = np.abs(blur.astype(np.int16) - bg.astype(np.int16)).max(axis=2)
     if colour_tol is None:
-        colour_tol = _colour_tolerance(bgr, bg)
+        colour_tol = background_tolerance(bgr, bg)
     by_colour = (diff > colour_tol).astype(np.uint8)
 
     gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
@@ -74,8 +109,18 @@ def foreground_mask(
         cv2.Scharr(gray, cv2.CV_32F, 1, 0), cv2.Scharr(gray, cv2.CV_32F, 0, 1)
     )
     if edge_tol is None:
-        flat = grad[by_colour == 0]
-        edge_tol = max(48.0, float(np.percentile(flat, 99.5)) * 1.5) if flat.size else 96.0
+        # Measure the gradient noise floor over pixels that are confidently
+        # lid rather than merely under the colour threshold.
+        #
+        # Sampling only wide-open lid (eroding this mask first) lowers the
+        # threshold enough to catch the outer edge of a white print border that
+        # is within ~10 levels of the lid — but it also lets the gap between two
+        # touching prints close up, merging them. A border shaved off one print
+        # is a smaller loss than two prints welded into one file, so the noisier
+        # sample is the deliberate choice here.
+        lid = diff <= max(6.0, colour_tol * 0.4)
+        floor = grad[lid]
+        edge_tol = max(40.0, float(np.percentile(floor, 99.5)) * 1.5) if floor.size > 99 else 96.0
     by_edge = (grad > edge_tol).astype(np.uint8)
 
     mask = cv2.bitwise_or(by_colour, by_edge)
@@ -86,23 +131,6 @@ def foreground_mask(
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, _kernel(bridge), iterations=1)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, _kernel(3), iterations=1)
     return mask
-
-
-def _colour_tolerance(bgr: np.ndarray, bg: np.ndarray, border: float = 0.02) -> float:
-    """How far a pixel must stray from the lid colour to count as photo.
-
-    Derived from the scan's own background noise, floored so that a very clean
-    scan does not end up with a hair-trigger tolerance that treats dust as art.
-    """
-    h, w = bgr.shape[:2]
-    b = max(2, int(round(min(h, w) * border)))
-    ring = np.concatenate(
-        [bgr[:b].reshape(-1, 3), bgr[-b:].reshape(-1, 3),
-         bgr[:, :b].reshape(-1, 3), bgr[:, -b:].reshape(-1, 3)]
-    ).astype(np.int16)
-    spread = np.abs(ring - bg.astype(np.int16)).max(axis=1)
-    mad = float(np.percentile(spread, 75))
-    return float(min(40.0, max(10.0, mad * 4)))
 
 
 def _kernel(size: int) -> np.ndarray:
