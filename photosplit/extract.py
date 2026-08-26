@@ -14,31 +14,46 @@ JPEG_QUALITY = 95
 
 
 def deskew_crop(bgr: np.ndarray, photo: Photo, pad: int = 8) -> np.ndarray:
-    """Return the photo as an upright image, rotated out of the scan."""
-    h, w = bgr.shape[:2]
+    """Return the photo as an upright image, cut out of the scan.
+
+    Resampling costs detail, so this does as little of it as possible: none at
+    all when the print is already square to the glass, and exactly one pass
+    when it is not. The obvious implementation — rotate the whole region, then
+    lift the rectangle out of it — quietly resamples twice.
+    """
+    height, width = bgr.shape[:2]
+    out_w = int(round(photo.size[0]))
+    out_h = int(round(photo.size[1]))
+    if out_w <= 0 or out_h <= 0:
+        return np.empty((0, 0, 3), dtype=bgr.dtype)
+
+    if abs(photo.angle) <= 0.05:
+        # Square to the glass: take the pixels exactly as scanned. Interpolating
+        # onto a fractional centre here would blur the image for nothing.
+        x0 = max(0, min(int(round(photo.center[0] - out_w / 2)), width - 1))
+        y0 = max(0, min(int(round(photo.center[1] - out_h / 2)), height - 1))
+        return bgr[y0 : min(height, y0 + out_h), x0 : min(width, x0 + out_w)]
+
     x0, y0, x1, y1 = photo.bounds()
     x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
-    x1, y1 = min(w, x1 + pad), min(h, y1 + pad)
+    x1, y1 = min(width, x1 + pad), min(height, y1 + pad)
     region = bgr[y0:y1, x0:x1]
     if region.size == 0:
-        return region
-
-    center = (photo.center[0] - x0, photo.center[1] - y0)
-    if abs(photo.angle) > 0.05:
-        matrix = cv2.getRotationMatrix2D(center, photo.angle, 1.0)
-        region = cv2.warpAffine(
-            region,
-            matrix,
-            (region.shape[1], region.shape[0]),
-            flags=cv2.INTER_CUBIC,
-            borderMode=cv2.BORDER_REPLICATE,
-        )
-
-    size = (int(round(photo.size[0])), int(round(photo.size[1])))
-    size = (min(size[0], region.shape[1]), min(size[1], region.shape[0]))
-    if size[0] <= 0 or size[1] <= 0:
         return np.empty((0, 0, 3), dtype=bgr.dtype)
-    return cv2.getRectSubPix(region, size, center)
+
+    # One transform that both straightens the print and places it in the
+    # output, so the pixels are interpolated once rather than twice.
+    centre = (photo.center[0] - x0, photo.center[1] - y0)
+    matrix = cv2.getRotationMatrix2D(centre, photo.angle, 1.0)
+    matrix[0, 2] += out_w / 2 - centre[0]
+    matrix[1, 2] += out_h / 2 - centre[1]
+    return cv2.warpAffine(
+        region,
+        matrix,
+        (out_w, out_h),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
 
 
 def trim_background(

@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from photosplit import extract
 from photosplit.cli import main
 from photosplit.detect import find_photos
 from tests.make_scan import BLEEDING, SEPARATED, TOUCHING, make
@@ -120,6 +121,52 @@ class DetectionTest(unittest.TestCase):
         cv2.imwrite(str(self.dir / "dust.png"), scan)
         photos, _ = detect(self.dir / "dust.png")
         self.assertEqual(photos, [])
+
+
+class ResamplingTest(unittest.TestCase):
+    """Cropping must not cost detail that the scanner captured."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        self.scan = self.dir / "scan.png"
+        make(self.scan, SEPARATED)
+
+    @staticmethod
+    def detail(image: np.ndarray) -> float:
+        grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        return float(cv2.Laplacian(grey, cv2.CV_32F).var())
+
+    def test_a_square_photo_is_taken_without_resampling(self) -> None:
+        # Interpolating onto a fractional centre used to blur every crop, even
+        # ones needing no rotation at all: roughly a third of the fine detail.
+        bgr = cv2.imread(str(self.scan))
+        photos, _ = find_photos(bgr, dpi=DPI)
+        straight = [p for p in photos if abs(p.angle) <= 0.05]
+        self.assertTrue(straight, "fixture should contain an unrotated photo")
+
+        for photo in straight:
+            crop = extract.deskew_crop(bgr, photo)
+            x0, y0, x1, y1 = photo.bounds()
+            source = bgr[max(0, y0) : y1, max(0, x0) : x1]
+            self.assertGreater(
+                self.detail(crop),
+                self.detail(source) * 0.9,
+                "crop is softer than the scan region it came from",
+            )
+
+    def test_a_rotated_photo_keeps_most_of_its_detail(self) -> None:
+        bgr = cv2.imread(str(self.scan))
+        photos, _ = find_photos(bgr, dpi=DPI)
+        rotated = [p for p in photos if abs(p.angle) > 0.5]
+        self.assertTrue(rotated, "fixture should contain a skewed photo")
+
+        for photo in rotated:
+            crop = extract.deskew_crop(bgr, photo)
+            x0, y0, x1, y1 = photo.bounds()
+            source = bgr[max(0, y0) : y1, max(0, x0) : x1]
+            # One interpolation pass is unavoidable when straightening; two is
+            # not, and two is what the old crop-then-rotate path cost.
+            self.assertGreater(self.detail(crop), self.detail(source) * 0.6)
 
 
 class CommandLineTest(unittest.TestCase):

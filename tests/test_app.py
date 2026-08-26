@@ -25,7 +25,13 @@ from AppKit import (
 from Foundation import NSUserDefaults
 
 from photosplit.app import AppDelegate, PreferencesWindow
-from photosplit.prefs import FORMATS, RESOLUTIONS
+from photosplit.prefs import (
+    FORMAT_LABELS,
+    FORMATS,
+    QUALITIES,
+    QUALITY_LABELS,
+    RESOLUTIONS,
+)
 from photosplit.scanner import run_loop_until
 from tests.make_scan import SEPARATED, make
 
@@ -209,7 +215,8 @@ class PreferencesTest(AppTestCase):
         self.assertEqual(
             titles(self.prefs_window.res_popup), [f"{r} dpi" for r in RESOLUTIONS]
         )
-        self.assertEqual(titles(self.prefs_window.fmt_popup), ["JPEG", "PNG", "TIFF"])
+        self.assertEqual(titles(self.prefs_window.fmt_popup), FORMAT_LABELS)
+        self.assertEqual(titles(self.prefs_window.quality_popup), QUALITY_LABELS)
 
     def test_changing_a_control_persists_and_reaches_the_split_options(self) -> None:
         window = self.prefs_window
@@ -224,6 +231,31 @@ class PreferencesTest(AppTestCase):
         options = prefs.as_split_options()
         self.assertEqual(options.fmt, "png")
         self.assertFalse(options.trim)
+
+    def test_jpeg_quality_reaches_the_saved_files(self) -> None:
+        window = self.prefs_window
+        window.fmt_popup.selectItemAtIndex_(FORMATS.index("jpg"))
+        window.quality_popup.selectItemAtIndex_(QUALITIES.index(100))
+        window.changed_(None)
+        self.assertEqual(self.delegate.prefs.as_split_options().quality, 100)
+
+    def test_quality_is_disabled_for_the_lossless_formats(self) -> None:
+        window = self.prefs_window
+        window.fmt_popup.selectItemAtIndex_(FORMATS.index("png"))
+        window.changed_(None)
+        self.assertFalse(window.quality_popup.isEnabled())
+        window.fmt_popup.selectItemAtIndex_(FORMATS.index("jpg"))
+        window.changed_(None)
+        self.assertTrue(window.quality_popup.isEnabled())
+
+    def test_the_window_shows_the_current_settings(self) -> None:
+        self.delegate.prefs["resolution"] = 600
+        self.delegate.prefs["quality"] = 98
+        self.delegate.prefs["format"] = "jpg"
+        self.delegate._refresh_footer()
+        shown = str(self.delegate.settings_label.stringValue())
+        self.assertIn("600 dpi", shown)
+        self.assertIn("98", shown)
 
     def test_reloading_shows_what_was_saved(self) -> None:
         self.delegate.prefs["resolution"] = 1200
