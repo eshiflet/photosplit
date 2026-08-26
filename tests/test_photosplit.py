@@ -86,6 +86,20 @@ class DetectionTest(unittest.TestCase):
         self.assertEqual(len(photos), len(BLEEDING))
         self.assertGreater(min(background), 200, "lid should read as near-white")
 
+    def test_photos_reaching_the_scan_boundary_are_flagged(self) -> None:
+        # The scannable area is often smaller than the glass, so a print that
+        # was fully on the platen can still arrive cut off. Whether it actually
+        # is cannot be known from the scan; that it reaches the edge can.
+        scan = self.dir / "bleed.png"
+        make(scan, BLEEDING)
+        photos, _ = detect(scan)
+        self.assertTrue(all(p.clipped for p in photos))
+
+        tidy = self.dir / "scan.png"
+        make(tidy, SEPARATED)
+        photos, _ = detect(tidy)
+        self.assertFalse(any(p.clipped for p in photos))
+
     def test_reading_order_is_top_left_first(self) -> None:
         scan = self.dir / "scan.png"
         make(scan, SEPARATED)

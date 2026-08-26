@@ -306,10 +306,21 @@ class AppDelegate(NSObject):
         if not result.count:
             self._log("  no photos found — is the lid closed?")
             return
+        clipped = 0
         for index, (photo, target) in enumerate(zip(result.photos, result.written), start=1):
             w = photo.size[0] / result.dpi
             h = photo.size[1] / result.dpi
-            self._log(f"  {index:2d}. {w:4.1f} x {h:4.1f} in   {target.name}")
+            note = ""
+            if photo.clipped:
+                clipped += 1
+                note = "   << reaches the edge of the scan area"
+            self._log(f"  {index:2d}. {w:4.1f} x {h:4.1f} in   {target.name}{note}")
+        if clipped:
+            self._log(
+                f"  {clipped} photo(s) reach the edge of the scan area and may be"
+                " incomplete. The scannable area is often smaller than the glass:"
+                " move them inside the markers and scan again."
+            )
 
     @objc.python_method
     def _split_finished(self, written: list[Path], reveal: bool) -> None:

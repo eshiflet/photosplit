@@ -59,13 +59,22 @@ def process(path: Path, args: argparse.Namespace) -> int:
         print(f"{label}: preview -> {result.preview_path}")
     print(f"{label}: {result.count} photo(s)")
 
+    reached = sum(1 for p in result.photos if p.clipped)
     for photo, target in zip(result.photos, result.written):
         w_in, h_in = photo.size[0] / result.dpi, photo.size[1] / result.dpi
-        detail = f"  {result.written.index(target) + 1:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°"
+        number = result.written.index(target) + 1
+        detail = f"  {number:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°"
+        if photo.clipped:
+            detail += "  ** reaches the edge of the scan area **"
         if args.dry_run:
             print(detail)
         else:
             print(f"{detail}  -> {target if args.verbose else target.name}")
+    if reached:
+        print(
+            f"  note: {reached} photo(s) reach the edge of the scan area and may be"
+            " incomplete. The scannable area is often smaller than the glass."
+        )
     return len(result.written)
 
 

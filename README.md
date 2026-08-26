@@ -57,6 +57,17 @@ with the same settings. Your originals are left alone.
   are handled, but a gap makes it certain.
 - Prints do not need to be square to the glass; skew up to 45° is corrected.
 - Close the lid. The white backing is what tells Photosplit where a photo stops.
+- **The scannable area is usually smaller than the glass.** Most flatbeds stop
+  at Letter or A4 even though the plate extends past the markers, so a print
+  sitting on glass beyond them is simply out of reach — of any software. Keep
+  prints inside the markers, and scan fewer per pass rather than packing the
+  bed. Photosplit says so in its log when a photo reaches the edge.
+
+To see exactly what your scanner can reach:
+
+```bash
+.venv/bin/python tools/scanner_info.py
+```
 
 ## The command line
 
@@ -109,6 +120,7 @@ Baselines live in `quality/`.
 | `photosplit/cli.py` | The `photosplit` command |
 | `build_app.sh` | Assembles `Photosplit.app` |
 | `tools/scan_quality.py` | Measures a scan, for comparing scanners |
+| `tools/scanner_info.py` | Reports a scanner's reachable area and resolutions |
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .

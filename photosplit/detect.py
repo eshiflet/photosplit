@@ -19,6 +19,7 @@ class Photo:
     size: tuple[float, float]  # width, height after deskew
     angle: float  # degrees to rotate the scan by to make this photo upright
     fill: float  # contour area / rect area, 1.0 for a perfect rectangle
+    clipped: bool = False  # runs into the edge of the scannable area
 
     @property
     def area(self) -> float:
@@ -137,6 +138,23 @@ def _kernel(size: int) -> np.ndarray:
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
 
 
+def _touches_edge(cx, cy, w, h, angle, shape, slack: int = 3) -> bool:
+    """Does this rectangle run into the boundary of the scanned area?
+
+    The bed is often smaller than the glass, so a print that looked fully on
+    the platen can still be cut off. Saying so beats handing back a crop that
+    is quietly missing an inch.
+    """
+    height, width = shape
+    box = cv2.boxPoints(((cx, cy), (w, h), angle))
+    return bool(
+        box[:, 0].min() <= slack
+        or box[:, 1].min() <= slack
+        or box[:, 0].max() >= width - 1 - slack
+        or box[:, 1].max() >= height - 1 - slack
+    )
+
+
 def _normalise(rect) -> tuple[tuple[float, float], tuple[float, float], float]:
     """Re-express a minAreaRect so the rotation needed is at most 45 degrees."""
     (cx, cy), (w, h), angle = rect
@@ -205,6 +223,7 @@ def find_photos(
                 size=(w / scale, h / scale),
                 angle=angle,
                 fill=fill,
+                clipped=_touches_edge(cx, cy, w, h, angle, work.shape[:2]),
             )
         )
 
