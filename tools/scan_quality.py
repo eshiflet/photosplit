@@ -39,6 +39,7 @@ class Quality:
     lid_cast: float
     lid_noise: float
     edge_rise_um: float | None
+    edge_rise_px: float | None
     edges_measured: int
     luma_p1: float
     luma_p99: float
@@ -149,6 +150,9 @@ def measure(path: Path, dpi_override: float | None = None) -> Quality:
         lid_cast=round(float(lid_rgb.max() - lid_rgb.min()), 2),
         lid_noise=round(lid_noise, 3),
         edge_rise_um=round(float(np.median(rises)), 1) if rises else None,
+        edge_rise_px=(
+            round(float(np.median(rises)) / (25400.0 / dpi), 1) if rises else None
+        ),
         edges_measured=len(rises),
         luma_p1=round(float(np.percentile(every, 1)), 1),
         luma_p99=round(float(np.percentile(every, 99)), 1),
@@ -165,6 +169,7 @@ ROWS = [
     ("lid colour cast", "lid_cast", "{:.2f}", "spread between channels; lower is more neutral"),
     ("lid noise", "lid_noise", "{:.3f}", "grain on a uniform surface; lower is cleaner"),
     ("edge rise", "edge_rise_um", "{} um", "10-90% at a print edge; lower is sharper"),
+    ("  in pixels", "edge_rise_px", "{} px", "under ~3 px this is the sampling floor, not the optics"),
     ("edges measured", "edges_measured", "{}", ""),
     ("shadow detail (p1)", "luma_p1", "{:.1f}", "higher means less crushed"),
     ("highlight (p99)", "luma_p99", "{:.1f}", "lower means less blown"),
@@ -174,6 +179,13 @@ ROWS = [
     ("shadow noise", "shadow_noise", "{:.2f}", "grain in the darkest tenth"),
 ]
 
+
+SAMPLING_WARNING = (
+    "\nEdge rise measured at 2 px or so is not a measurement of the optics: the\n"
+    "transition is sharper than the pixel grid, and the figure only reflects the\n"
+    "resolution chosen. Compare optics between scanners at their highest\n"
+    "resolution, where sampling out-resolves the lens."
+)
 
 LID_ONLY_WARNING = (
     "\nNote: the lid figures compare cleanly between any two scans. The tonal\n"
@@ -193,6 +205,8 @@ def report(results: list[Quality]) -> None:
             value = getattr(result, field)
             cells += f"{('n/a' if value is None else fmt.format(value)):>24}"
         print(f"{label:{width}}{cells}   {note}")
+    if any(r.edge_rise_px is not None and r.edge_rise_px <= 2.5 for r in results):
+        print(SAMPLING_WARNING)
     if len(results) > 1 and len({r.photos for r in results}) > 1:
         print(LID_ONLY_WARNING)
 
