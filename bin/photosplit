@@ -1,0 +1,11 @@
+#!/bin/sh
+# Run photosplit out of its own virtualenv, wherever the repo happens to live.
+# Resolve symlinks first: this script is normally reached via ~/.local/bin.
+src=$0
+while [ -L "$src" ]; do
+  dir=$(cd -P -- "$(dirname -- "$src")" && pwd)
+  src=$(readlink -- "$src")
+  case $src in /*) ;; *) src=$dir/$src ;; esac
+done
+here=$(cd -P -- "$(dirname -- "$src")/.." && pwd)
+exec "$here/.venv/bin/python" -m photosplit "$@"
