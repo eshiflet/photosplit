@@ -14,12 +14,18 @@ edge, and saves them into the folder you picked.
 Any Mac, Apple Silicon or Intel, macOS 11 or newer.
 
 ```bash
-git clone <this repo> ~/photosplit && cd ~/photosplit && ./install.sh
+git clone <this repo> ~/Documents/GitHub/photosplit
+cd ~/Documents/GitHub/photosplit && ./install.sh
 ```
 
 That builds a self-contained virtualenv, `Photosplit.app`, and a `photosplit`
 command in `~/.local/bin`. Drag `Photosplit.app` to your Dock. Re-run
 `./install.sh` any time; it is idempotent.
+
+The path above is only a convention — clone it wherever you keep repositories.
+But **if you move the repo afterwards, re-run `./install.sh`**. The virtualenv,
+the `~/.local/bin` symlink and the app bundle all bake in absolute paths, and
+they break silently until the script rewrites them.
 
 To set up a second Mac, clone the repo there and run `./install.sh` again. The
 virtualenv is built per machine, so do not copy `.venv` between them.

@@ -68,8 +68,13 @@ What is already known about the HP:
 ## Setting up on another Mac
 
 ```bash
-git clone <this repo> ~/photosplit && cd ~/photosplit && ./install.sh
+git clone <this repo> ~/Documents/GitHub/photosplit
+cd ~/Documents/GitHub/photosplit && ./install.sh
 ```
+
+The path is only a convention; anywhere works. If the repo is moved after
+install, re-run `./install.sh` — the virtualenv, the `~/.local/bin` symlink and
+the app bundle all hold absolute paths and break silently until it reruns.
 
 The virtualenv is built per machine — never copy `.venv` between them. Both an
 Apple Silicon and an Intel Mac work; macOS 11 or newer.
