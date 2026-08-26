@@ -6,32 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-import cv2
-import numpy as np
-from PIL import Image
-
-from . import __version__, extract
-from .detect import Photo, find_photos
-
-Image.MAX_IMAGE_PIXELS = None  # 1200 dpi scans are legitimately huge
-
-SCAN_SUFFIXES = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
-DEFAULT_DPI = 300.0
-
-
-def load_scan(path: Path, dpi_override: float | None) -> tuple[np.ndarray, float]:
-    """Read a scan as BGR, along with the resolution it was scanned at."""
-    with Image.open(path) as image:
-        dpi = dpi_override or _dpi_from(image)
-        rgb = np.asarray(image.convert("RGB"))
-    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), dpi
-
-
-def _dpi_from(image: Image.Image) -> float:
-    value = image.info.get("dpi")
-    if isinstance(value, (tuple, list)) and value and float(value[0]) > 1:
-        return float(value[0])
-    return DEFAULT_DPI
+from . import __version__
+from .split import SCAN_SUFFIXES, SplitOptions, split_scan
 
 
 def gather(inputs: list[str], recursive: bool) -> list[Path]:
@@ -54,66 +30,43 @@ def gather(inputs: list[str], recursive: bool) -> list[Path]:
     return sorted({p.resolve() for p in found if "-preview" not in p.stem})
 
 
-def process(path: Path, args: argparse.Namespace) -> int:
-    """Split one scan. Returns the number of photos written."""
-    bgr, dpi = load_scan(path, args.dpi)
-    photos: list[Photo]
-    photos, background = find_photos(
-        bgr,
-        dpi=dpi,
-        min_side_in=args.min_size,
+def options_from(args: argparse.Namespace) -> SplitOptions:
+    return SplitOptions(
+        output_dir=Path(args.output).expanduser() if args.output else None,
+        fmt=args.format,
+        quality=args.quality,
+        dpi_override=args.dpi,
+        min_size=args.min_size,
+        separation=args.separation,
         min_fill=args.min_fill,
-        separation_in=args.separation,
+        deskew=not args.no_deskew,
+        trim=not args.no_trim,
+        preview=args.preview,
     )
 
-    out_dir = Path(args.output).expanduser() if args.output else path.parent / "split"
-    label = f"{path.name} [{dpi:g} dpi]"
 
-    if not photos:
+def process(path: Path, args: argparse.Namespace) -> int:
+    """Split one scan, reporting as it goes. Returns the number of photos."""
+    options = options_from(args)
+    result = split_scan(path, options, write=not args.dry_run)
+    label = f"{path.name} [{result.dpi:g} dpi]"
+
+    if not result.count:
         print(f"{label}: no photos found — try --preview, or lower --min-size")
         return 0
 
-    if args.preview:
-        preview_path = out_dir / f"{path.stem}-preview.jpg"
-        extract.save(extract.preview(bgr, photos), preview_path, dpi, quality=88)
-        print(f"{label}: preview -> {preview_path}")
+    if result.preview_path and not args.dry_run:
+        print(f"{label}: preview -> {result.preview_path}")
+    print(f"{label}: {result.count} photo(s)")
 
-    print(f"{label}: {len(photos)} photo(s)")
-    written = 0
-    for index, photo in enumerate(photos, start=1):
-        w_in, h_in = photo.size[0] / dpi, photo.size[1] / dpi
-        detail = f'  {index:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°'
+    for photo, target in zip(result.photos, result.written):
+        w_in, h_in = photo.size[0] / result.dpi, photo.size[1] / result.dpi
+        detail = f"  {result.written.index(target) + 1:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°"
         if args.dry_run:
             print(detail)
-            written += 1
-            continue
-
-        crop = photo_crop(bgr, photo, background, dpi, args)
-        if crop.size == 0:
-            print(f"{detail}  -- skipped, empty crop", file=sys.stderr)
-            continue
-        target = out_dir / f"{path.stem}-{index:02d}.{args.format}"
-        extract.save(crop, target, dpi, quality=args.quality)
-        written += 1
-        if args.verbose:
-            print(f"{detail}  -> {target}")
         else:
-            print(f"{detail}  -> {target.name}")
-    return written
-
-
-def photo_crop(
-    bgr: np.ndarray,
-    photo: Photo,
-    background: np.ndarray,
-    dpi: float,
-    args: argparse.Namespace,
-) -> np.ndarray:
-    upright = Photo(photo.center, photo.size, 0.0 if args.no_deskew else photo.angle, photo.fill)
-    crop = extract.deskew_crop(bgr, upright)
-    if not args.no_trim:
-        crop = extract.trim_background(crop, background, dpi)
-    return crop
+            print(f"{detail}  -> {target if args.verbose else target.name}")
+    return len(result.written)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -137,8 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--separation",
         type=float,
-        default=0.02,
-        help="inches of erosion used to pull touching photos apart (default 0.02)",
+        default=0.03,
+        help="inches of erosion used to pull touching photos apart (default 0.03)",
     )
     parser.add_argument(
         "--min-fill",

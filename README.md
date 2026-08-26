@@ -1,85 +1,103 @@
-# photosplit
+# Photosplit
 
-Scan several photos at once on a flatbed, get one cropped, straightened image
-file per photo. That is the whole program — the one job you would otherwise buy
-VueScan for.
+Put several photos on the flatbed, press one button, get one cropped,
+straightened file per photo. No other steps.
 
-It reads a scan you have already made (Image Capture, Preview, or whatever came
-with the scanner), finds each print on the glass, rotates out the few degrees of
-skew from laying them down by hand, crops to the print's edge, and writes
-`scan-01.jpg`, `scan-02.jpg`, and so on at the scan's original resolution.
+Photosplit drives the scanner through macOS's own ImageCaptureCore framework —
+the same plumbing Image Capture.app uses — so any scanner that already works on
+your Mac works here, with no extra driver. It scans the whole bed, finds each
+print, rotates out the skew from laying them down by hand, crops to the print's
+edge, and saves them into the folder you picked.
 
 ## Install
 
-Works on any Apple Silicon or Intel Mac with Python 3.9 or newer.
+Any Mac, Apple Silicon or Intel, macOS 11 or newer.
 
 ```bash
 git clone <this repo> ~/photosplit && cd ~/photosplit && ./install.sh
 ```
 
-That builds a self-contained virtualenv, puts a `photosplit` command in
-`~/.local/bin`, and builds `Photosplit.app`, a drag-and-drop droplet. Re-run it
-any time; it is idempotent. To set up the second Mac, copy or clone the folder
-there and run `./install.sh` again — the virtualenv is per-machine, so do not
-copy `.venv` across.
+That builds a self-contained virtualenv, `Photosplit.app`, and a `photosplit`
+command in `~/.local/bin`. Drag `Photosplit.app` to your Dock. Re-run
+`./install.sh` any time; it is idempotent.
+
+To set up a second Mac, clone the repo there and run `./install.sh` again. The
+virtualenv is built per machine, so do not copy `.venv` between them.
 
 ## Use
 
-Drag a scan (or a folder of scans) onto `Photosplit.app`, or:
+Open Photosplit, put the photos on the glass, close the lid, press **Scan**.
+The window shows what it found and where it went; the folder opens when it is
+done. Then load the next batch and press Scan again.
 
-```bash
-photosplit ~/Pictures/scan-001.tif
-```
+Everything adjustable is in **Preferences** (⌘,):
 
-Crops land in a `split` folder beside the scan. Point a whole shoebox at it:
+| Setting | Default |
+| --- | --- |
+| Save photos to | `~/Pictures/Photosplit` |
+| Resolution | 300 dpi (use 600 for wallet-size or anything you may enlarge) |
+| Save as | JPEG, PNG, or TIFF |
+| Scan in colour | on |
+| Ignore anything smaller than | 1 inch — raises this to reject dust |
+| Straighten crooked photos | on |
+| Trim leftover scanner background | on |
+| Keep the full scan as well | off |
+| Save a marked-up preview of each scan | off — turn on to see what it detected |
+| Open the folder when a scan finishes | on |
 
-```bash
-photosplit ~/Pictures/Scans -o ~/Pictures/Photos --preview
-```
+Files are named by the moment they were scanned, so nothing ever overwrites
+anything: `2026-08-26-143205-01.jpg`, `-02`, and so on.
 
-`--preview` also writes a copy of the scan with a red box and a number around
-every photo it found, which is the fastest way to see what it did.
-
-Check before writing anything:
-
-```bash
-photosplit ~/Pictures/Scans --dry-run
-```
+You can also drop scans you already have onto the app icon, and they are split
+with the same settings. Your originals are left alone.
 
 ## Scanning tips
 
 - Leave a **visible gap** between prints, about a quarter inch. Touching prints
   are handled, but a gap makes it certain.
 - Prints do not need to be square to the glass; skew up to 45° is corrected.
-- Scan at **300 dpi** for 4x6s, **600 dpi** for wallet-size or anything you may
-  want to enlarge. The crops keep whatever resolution the scan had, and the dpi
-  is written into each file.
-- Close the lid. The white backing is what tells the program where a photo stops.
+- Close the lid. The white backing is what tells Photosplit where a photo stops.
+
+## The command line
+
+The same engine, for scans you already have on disk:
+
+```bash
+photosplit ~/Pictures/Scans -o ~/Pictures/Photos --preview
+```
+
+`--dry-run` reports without writing. `photosplit --help` lists the rest.
 
 ## When it gets something wrong
 
-| Symptom | Fix |
-| --- | --- |
-| One photo came out as several pieces | `--min-fill 0.4` |
-| Two photos merged into one crop | `--separation 0.06` |
-| Small prints ignored | `--min-size 0.6` |
-| Dust or lint picked up as photos | `--min-size 1.5` |
-| A white border got shaved off | `--no-trim` |
-| Crops look slightly rotated | `--no-deskew` |
-| Sizes reported wrong | `--dpi 600` (scan had no resolution tag) |
+Turn on the marked-up preview first — it shows exactly what was detected.
 
-`photosplit --help` lists everything.
+| Symptom | Preference | Command line |
+| --- | --- | --- |
+| One photo came out as several pieces | — | `--min-fill 0.4` |
+| Two photos merged into one crop | — | `--separation 0.06` |
+| Small prints ignored | Ignore anything smaller than: 0.5" | `--min-size 0.6` |
+| Dust picked up as photos | Ignore anything smaller than: 1.5" | `--min-size 1.5` |
+| A white border got shaved off | Trim leftover background: off | `--no-trim` |
+| Crops look slightly rotated | Straighten: off | `--no-deskew` |
 
 ## Layout
 
 | File | What it does |
 | --- | --- |
-| `photosplit/detect.py` | Separates photo from scanner lid, returns a rectangle per print |
-| `photosplit/extract.py` | Rotates, crops, trims, and saves; draws the preview |
-| `photosplit/cli.py` | Argument handling and the batch loop |
-| `tests/make_scan.py` | Builds synthetic scans with known photo placements |
-| `tests/test_photosplit.py` | Checks detection against those known placements |
+| `photosplit/scanner.py` | Drives the scanner through ImageCaptureCore |
+| `photosplit/detect.py` | Separates photo from scanner lid, one rectangle per print |
+| `photosplit/extract.py` | Rotates, crops, trims, saves; draws the preview |
+| `photosplit/split.py` | The scan-to-files step, shared by the app and the CLI |
+| `photosplit/app.py` | The window, the Scan button, Preferences |
+| `photosplit/prefs.py` | Settings, stored in NSUserDefaults |
+| `photosplit/cli.py` | The `photosplit` command |
+| `build_app.sh` | Assembles `Photosplit.app` |
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .
 ```
+
+Detection is checked against synthetic scans with known photo placements, and
+the app's windows are built offscreen and inspected — including a contrast check
+that fails if the log is ever unreadable in dark mode.

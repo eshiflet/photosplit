@@ -18,28 +18,5 @@ case ":$PATH:" in
   *) echo "  note: add this to ~/.zshrc ->  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
 
-rm -rf "$here/Photosplit.app"
-osacompile -o "$here/Photosplit.app" - <<APPLESCRIPT
-on run
-	display dialog "Drop a scan (or a folder of scans) onto this app." buttons {"OK"} default button 1 with title "Photosplit"
-end run
-
-on open dropped
-	set tool to quoted form of "$here/bin/photosplit"
-	set args to ""
-	repeat with item_ in dropped
-		set args to args & " " & quoted form of POSIX path of item_
-	end repeat
-	try
-		set report to do shell script tool & args & " --preview 2>&1"
-		display dialog report buttons {"Show Files", "Done"} default button 1 with title "Photosplit"
-		if button returned of result is "Show Files" then
-			set first_ to item 1 of dropped
-			tell application "Finder" to open ((container of (first_ as alias)) as alias)
-		end if
-	on error message_
-		display alert "Photosplit could not finish" message message_ as warning
-	end try
-end open
-APPLESCRIPT
-echo "droplet:   $here/Photosplit.app  (drag it to your Dock)"
+"$here/build_app.sh" >/dev/null
+echo "app:       $here/Photosplit.app  (drag it to your Dock)"

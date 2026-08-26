@@ -1,0 +1,59 @@
+"""Preferences, stored where every other Mac app stores them: NSUserDefaults."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from Foundation import NSUserDefaults
+
+SUITE = "com.ericshiflet.photosplit"
+
+DEFAULTS: dict[str, object] = {
+    "outputFolder": str(Path.home() / "Pictures" / "Photosplit"),
+    "resolution": 300,
+    "colour": True,
+    "format": "jpg",
+    "quality": 95,
+    "minSize": 1.0,
+    "deskew": True,
+    "trim": True,
+    "keepFullScan": False,
+    "writePreview": False,
+    "revealWhenDone": True,
+    "scannerName": "",
+}
+
+FORMATS = ["jpg", "png", "tif"]
+RESOLUTIONS = [150, 200, 300, 400, 600, 1200]
+
+
+class Prefs:
+    """Thin typed wrapper so the rest of the app never touches raw defaults."""
+
+    def __init__(self) -> None:
+        self._store = NSUserDefaults.alloc().initWithSuiteName_(SUITE)
+        self._store.registerDefaults_(DEFAULTS)
+
+    def __getitem__(self, key: str):
+        value = self._store.objectForKey_(key)
+        return DEFAULTS[key] if value is None else value
+
+    def __setitem__(self, key: str, value) -> None:
+        self._store.setObject_forKey_(value, key)
+
+    @property
+    def output_folder(self) -> Path:
+        return Path(str(self["outputFolder"])).expanduser()
+
+    def as_split_options(self):
+        from .split import SplitOptions
+
+        return SplitOptions(
+            output_dir=self.output_folder,
+            fmt=str(self["format"]),
+            quality=int(self["quality"]),
+            min_size=float(self["minSize"]),
+            deskew=bool(self["deskew"]),
+            trim=bool(self["trim"]),
+            preview=bool(self["writePreview"]),
+        )
