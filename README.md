@@ -106,6 +106,21 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | Dust picked up as photos | Ignore anything smaller than: 1.5" | `--min-size 1.5` |
 | A white border got shaved off | Trim leftover background: off | `--no-trim` |
 | Crops look slightly rotated | Straighten: off | `--no-deskew` |
+| Everything has a colour tint | — | `--neutralise` |
+
+## Colour
+
+`--neutralise` colour-balances a scan against its own lid. The lid is white, so
+whatever tint it comes back with is the scanner's, or the mat's, and the same
+tint lies over the prints; dividing it out takes it off the photographs too.
+On the Epson V500 this takes the lid from R 237.4, G 241.8, B 244.4 — four
+levels of blue over everything — down to neutral, leaving sharpness, shadow
+detail and highlights where they were.
+
+It fixes neutrality, not colour accuracy: it makes a known white read as white,
+but cannot tell you whether a red is the right red. That needs a target with
+known values on the glass, an IT8 or a ColorChecker. It is off by default,
+because it changes the colour of what you get out.
 
 ## Comparing two scanners
 

@@ -42,6 +42,7 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         deskew=not args.no_deskew,
         trim=not args.no_trim,
         preview=args.preview,
+        neutralise=args.neutralise,
     )
 
 
@@ -110,6 +111,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--neutralise",
+        "--neutralize",
+        dest="neutralise",
+        action="store_true",
+        help="colour-balance the scan against the lid, which is white",
+    )
     parser.add_argument(
         "-p", "--preview", action="store_true", help="also write the scan with boxes drawn on it"
     )

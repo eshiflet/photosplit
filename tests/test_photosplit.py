@@ -169,6 +169,77 @@ class ResamplingTest(unittest.TestCase):
             self.assertGreater(self.detail(crop), self.detail(source) * 0.6)
 
 
+class NeutraliseTest(unittest.TestCase):
+    """Colour balancing against the lid, which is white by definition."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        self.scan = self.dir / "scan.png"
+        make(self.scan, SEPARATED)
+
+    @staticmethod
+    def tint(bgr: np.ndarray, bgr_gain) -> np.ndarray:
+        return np.clip(bgr * np.asarray(bgr_gain), 0, 255).astype(np.uint8)
+
+    @staticmethod
+    def spread(background: np.ndarray) -> float:
+        return float(background.max() - background.min())
+
+    def test_a_tinted_scan_comes_back_neutral(self) -> None:
+        # The V500 reads its own white mat at roughly B 244, G 243, R 240:
+        # a few levels of blue laid over everything on the glass.
+        bgr = cv2.imread(str(self.scan))
+        tinted = self.tint(bgr, (1.0, 0.985, 0.955))
+
+        _, before = find_photos(tinted, dpi=DPI)
+        fixed = extract.neutralise(tinted, before)
+        _, after = find_photos(fixed, dpi=DPI)
+
+        self.assertGreater(self.spread(before), 6.0, "fixture should be visibly tinted")
+        self.assertLess(self.spread(after), 1.5)
+
+    def test_a_neutral_scan_is_left_where_it_is(self) -> None:
+        bgr = cv2.imread(str(self.scan))
+        _, background = find_photos(bgr, dpi=DPI)
+        fixed = extract.neutralise(bgr, background)
+        # The fixture's lid is already grey, so there is nothing to take out.
+        self.assertLess(float(np.abs(fixed.astype(int) - bgr.astype(int)).mean()), 1.0)
+
+    def test_correcting_never_darkens_the_scan(self) -> None:
+        # Scaling down to the dimmest channel would balance just as well and
+        # cost brightness for nothing. Every gain should be at or above 1.
+        bgr = cv2.imread(str(self.scan))
+        tinted = self.tint(bgr, (1.0, 0.985, 0.955))
+        _, background = find_photos(tinted, dpi=DPI)
+        fixed = extract.neutralise(tinted, background)
+        self.assertTrue(bool((fixed >= tinted).all()))
+
+    def test_an_unusable_reference_leaves_the_pixels_alone(self) -> None:
+        # A scan with no lid in it at all must not be silently mangled.
+        bgr = cv2.imread(str(self.scan))
+        for useless in (np.zeros(3), np.array([0.0, 12.0, 30.0])):
+            with self.subTest(background=list(useless)):
+                self.assertTrue(bool((extract.neutralise(bgr, useless) == bgr).all()))
+
+    def test_the_flag_balances_what_gets_written(self) -> None:
+        bgr = cv2.imread(str(self.scan))
+        tinted_scan = self.dir / "tinted.png"
+        cv2.imwrite(str(tinted_scan), self.tint(bgr, (1.0, 0.985, 0.955)))
+        out = self.dir / "out"
+
+        self.assertEqual(main([str(tinted_scan), "-o", str(out), "--neutralise"]), 0)
+        written = sorted(out.glob("tinted-*.jpg"))
+        self.assertTrue(written)
+
+        plain = self.dir / "plain"
+        main([str(tinted_scan), "-o", str(plain)])
+        for balanced, untouched in zip(written, sorted(plain.glob("tinted-*.jpg"))):
+            a = cv2.imread(str(balanced)).reshape(-1, 3).mean(axis=0)
+            b = cv2.imread(str(untouched)).reshape(-1, 3).mean(axis=0)
+            # Red was the channel held down, so it is the one that comes back.
+            self.assertGreater(a[2], b[2])
+
+
 class CommandLineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))

@@ -90,6 +90,37 @@ def trim_background(
     return crop[top : h - bottom, left : w - right]
 
 
+def neutralise(bgr: np.ndarray, background: np.ndarray) -> np.ndarray:
+    """Scale each channel so the lid, which is white, comes out neutral.
+
+    Every scan carries its own reference white: the lid the prints sit against.
+    Whatever tint it comes back with — a sensor that is not quite balanced, a
+    mat that was never quite white — is the same tint laid over the prints, so
+    dividing it out of the whole scan takes it off the photographs too.
+
+    This corrects neutrality, not colour accuracy. It makes a known white read
+    as white; it cannot tell you a red is the right red. That needs a target
+    with known values on the glass.
+
+    Done through a lookup table rather than arithmetic on the image: a 1200 dpi
+    scan is 143 megapixels, and promoting that to float to multiply it would
+    cost gigabytes on top of a split that already peaks near three.
+    """
+    bg = np.asarray(background, dtype=np.float64).reshape(-1)
+    if bg.size != 3 or bg.min() <= 0:
+        return bgr  # no usable reference; leave the pixels alone
+
+    # Scale up to the brightest channel rather than down to the dimmest, so a
+    # correction never darkens the scan. The gains are small either way.
+    gain = bg.max() / bg
+
+    ramp = np.arange(256, dtype=np.float64)
+    table = np.empty((1, 256, 3), dtype=np.uint8)
+    for channel in range(3):
+        table[0, :, channel] = np.clip(ramp * gain[channel], 0, 255).astype(np.uint8)
+    return cv2.LUT(bgr, table)
+
+
 def save(crop: np.ndarray, path: Path, dpi: float, quality: int = JPEG_QUALITY) -> None:
     """Write a crop, tagging it with the scan's resolution."""
     image = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))

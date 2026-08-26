@@ -30,6 +30,7 @@ class SplitOptions:
     min_fill: float = 0.62
     deskew: bool = True
     trim: bool = True
+    neutralise: bool = False
     preview: bool = False
     stem: str | None = None  # base name for the output files
 
@@ -80,6 +81,10 @@ def split_scan(
     result = SplitResult(scan=path, dpi=dpi, photos=photos)
     if not photos:
         return result
+
+    if options.neutralise:
+        # Correct the whole scan once, so the preview shows what the crops get.
+        bgr = extract.neutralise(bgr, background)
 
     out_dir = options.output_dir or path.parent / "split"
     stem = options.stem or path.stem
