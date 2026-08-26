@@ -42,7 +42,7 @@ NSApplication.sharedApplication().setActivationPolicy_(
 )
 
 _REAL_SUITE = prefs_module.SUITE
-_TEST_SUITE = f"com.ericshiflet.photosplit.tests.{uuid.uuid4().hex}"
+_TEST_SUITE = f"com.photosplit.app.tests.{uuid.uuid4().hex}"
 
 
 def setUpModule() -> None:

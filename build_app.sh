@@ -31,7 +31,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <dict>
 	<key>CFBundleName</key><string>Photosplit</string>
 	<key>CFBundleDisplayName</key><string>Photosplit</string>
-	<key>CFBundleIdentifier</key><string>com.ericshiflet.photosplit</string>
+	<key>CFBundleIdentifier</key><string>com.photosplit.app</string>
 	<key>CFBundleExecutable</key><string>Photosplit</string>
 	<key>CFBundleIconFile</key><string>Photosplit</string>
 	<key>CFBundlePackageType</key><string>APPL</string>

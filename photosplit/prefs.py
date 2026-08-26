@@ -6,7 +6,7 @@ from pathlib import Path
 
 from Foundation import NSBundle, NSUserDefaults
 
-SUITE = "com.ericshiflet.photosplit"
+SUITE = "com.photosplit.app"
 
 DEFAULTS: dict[str, object] = {
     "outputFolder": str(Path.home() / "Pictures" / "Photosplit"),
