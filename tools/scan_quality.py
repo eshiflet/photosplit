@@ -175,6 +175,14 @@ ROWS = [
 ]
 
 
+LID_ONLY_WARNING = (
+    "\nNote: the lid figures compare cleanly between any two scans. The tonal\n"
+    "figures (shadow, highlight, clipping, saturation) describe the prints that\n"
+    "were on the glass, so they are only comparable when both scans hold the\n"
+    "same photos."
+)
+
+
 def report(results: list[Quality]) -> None:
     width = max(len(label) for label, *_ in ROWS) + 2
     header = "".join(f"{r.scan[:22]:>24}" for r in results)
@@ -185,6 +193,8 @@ def report(results: list[Quality]) -> None:
             value = getattr(result, field)
             cells += f"{('n/a' if value is None else fmt.format(value)):>24}"
         print(f"{label:{width}}{cells}   {note}")
+    if len(results) > 1 and len({r.photos for r in results}) > 1:
+        print(LID_ONLY_WARNING)
 
 
 def main() -> int:
