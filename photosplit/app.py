@@ -39,6 +39,8 @@ from AppKit import (
     NSProgressIndicatorStyleBar,
     NSScrollView,
     NSSwitchButton,
+    NSTabView,
+    NSTabViewItem,
     NSTextField,
     NSTextView,
     NSWindow,
@@ -52,6 +54,9 @@ from Foundation import NSAttributedString, NSObject, NSOperationQueue, NSTimer
 from . import __version__
 from . import blank as blank_module
 from .dust import MIN_DPI as DUST_MIN_DPI
+from .dust import STRENGTHS as _DUST
+
+DUST_STRENGTHS = list(_DUST)
 from .prefs import (
     FORMAT_LABELS,
     FORMATS,
@@ -671,41 +676,57 @@ class PreferencesWindow(NSObject):
         self.window.setTitle_("Photosplit Preferences")
         self.window.setReleasedWhenClosed_(False)
         self.window.center()
-        view = self.window.contentView()
 
-        view.addSubview_(label("Save photos to", NSMakeRect(24, 376, 200, 18), bold=True))
-        self.folder_field = label("", NSMakeRect(24, 354, 330, 18), secondary=True)
-        view.addSubview_(self.folder_field)
-        choose = NSButton.alloc().initWithFrame_(NSMakeRect(366, 346, 90, 28))
+        # Two pages rather than one long window. Making a scan and correcting
+        # one afterwards are different jobs, done at different times, and the
+        # second is only going to grow.
+        tabs = NSTabView.alloc().initWithFrame_(NSMakeRect(8, 8, 464, 404))
+        self.window.contentView().addSubview_(tabs)
+        scanning = self._page(tabs, "Scanning")
+        after = self._page(tabs, "Post-Processing")
+
+        scanning.addSubview_(label("Save photos to", NSMakeRect(24, 344, 200, 18), bold=True))
+        self.folder_field = label("", NSMakeRect(24, 322, 310, 18), secondary=True)
+        scanning.addSubview_(self.folder_field)
+        choose = NSButton.alloc().initWithFrame_(NSMakeRect(342, 314, 90, 28))
         choose.setTitle_("Choose…")
         choose.setBezelStyle_(NSBezelStyleRounded)
         choose.setTarget_(self)
         choose.setAction_("chooseFolder:")
-        view.addSubview_(choose)
+        scanning.addSubview_(choose)
 
-        self.quality_heading = label("Scan quality", NSMakeRect(24, 308, 300, 18), bold=True)
-        view.addSubview_(self.quality_heading)
-        view.addSubview_(label("Resolution", NSMakeRect(24, 280, 90, 18)))
+        self.quality_heading = label("Scan quality", NSMakeRect(24, 280, 300, 18), bold=True)
+        scanning.addSubview_(self.quality_heading)
+        scanning.addSubview_(label("Resolution", NSMakeRect(24, 252, 90, 18)))
         self.res_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(120, 275, 120, 26), False
+            NSMakeRect(120, 247, 120, 26), False
         )
         self.res_popup.addItemsWithTitles_([f"{r} dpi" for r in RESOLUTIONS])
         self.res_popup.setTarget_(self)
         self.res_popup.setAction_("changed:")
-        view.addSubview_(self.res_popup)
+        scanning.addSubview_(self.res_popup)
 
-        view.addSubview_(label("Save as", NSMakeRect(252, 280, 60, 18)))
+        scanning.addSubview_(label("Save as", NSMakeRect(252, 252, 60, 18)))
         self.fmt_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(312, 275, 144, 26), False
+            NSMakeRect(312, 247, 120, 26), False
         )
         self.fmt_popup.addItemsWithTitles_(FORMAT_LABELS)
         self.fmt_popup.setTarget_(self)
         self.fmt_popup.setAction_("changed:")
-        view.addSubview_(self.fmt_popup)
+        scanning.addSubview_(self.fmt_popup)
 
-        view.addSubview_(label("Depth", NSMakeRect(252, 244, 60, 18)))
+        scanning.addSubview_(label("JPEG quality", NSMakeRect(24, 216, 90, 18)))
+        self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+            NSMakeRect(120, 211, 120, 26), False
+        )
+        self.quality_popup.addItemsWithTitles_(QUALITY_LABELS)
+        self.quality_popup.setTarget_(self)
+        self.quality_popup.setAction_("changed:")
+        scanning.addSubview_(self.quality_popup)
+
+        scanning.addSubview_(label("Depth", NSMakeRect(252, 216, 60, 18)))
         self.depth_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(312, 239, 144, 26), False
+            NSMakeRect(312, 211, 120, 26), False
         )
         self.depth_popup.addItemsWithTitles_([f"{d}-bit" for d in BIT_DEPTHS])
         self.depth_popup.setTarget_(self)
@@ -713,38 +734,14 @@ class PreferencesWindow(NSObject):
         self.depth_popup.setToolTip_(
             "16-bit keeps shadow detail through the inversion a negative needs."
         )
-        view.addSubview_(self.depth_popup)
-
-        view.addSubview_(label("JPEG quality", NSMakeRect(24, 244, 90, 18)))
-        self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(120, 239, 120, 26), False
-        )
-        self.quality_popup.addItemsWithTitles_(QUALITY_LABELS)
-        self.quality_popup.setTarget_(self)
-        self.quality_popup.setAction_("changed:")
-        view.addSubview_(self.quality_popup)
+        scanning.addSubview_(self.depth_popup)
 
         self.colour_box = checkbox(
-            "Scan in colour", NSMakeRect(24, 208, 200, 20), self, "changed:"
+            "Scan in colour", NSMakeRect(24, 180, 200, 20), self, "changed:"
         )
-        view.addSubview_(self.colour_box)
+        scanning.addSubview_(self.colour_box)
 
-        self.invert_box = checkbox(
-            "Negatives — turn them into positives",
-            NSMakeRect(24, 184, 300, 20), self, "changed:",
-        )
-        view.addSubview_(self.invert_box)
-
-        self.dust_box = checkbox(
-            "Remove dust specks", NSMakeRect(24, 160, 220, 20), self, "changed:"
-        )
-        view.addSubview_(self.dust_box)
-        self.dust_note = label("", NSMakeRect(246, 160, 220, 18), secondary=True)
-        view.addSubview_(self.dust_note)
-
-        self.calibrate_button = NSButton.alloc().initWithFrame_(
-            NSMakeRect(330, 202, 126, 28)
-        )
+        self.calibrate_button = NSButton.alloc().initWithFrame_(NSMakeRect(306, 174, 126, 28))
         self.calibrate_button.setTitle_("Calibrate…")  # … because it asks first
         self.calibrate_button.setBezelStyle_(NSBezelStyleRounded)
         self.calibrate_button.setTarget_(owner)
@@ -752,44 +749,83 @@ class PreferencesWindow(NSObject):
         self.calibrate_button.setToolTip_(
             "Scan the empty bed and record the dust on it. Run this after cleaning the glass."
         )
-        view.addSubview_(self.calibrate_button)
+        scanning.addSubview_(self.calibrate_button)
 
-        view.addSubview_(label("Cropping", NSMakeRect(24, 172, 200, 18), bold=True))
-        view.addSubview_(label("Ignore anything smaller than", NSMakeRect(24, 144, 190, 18)))
+        scanning.addSubview_(label("Cropping", NSMakeRect(24, 144, 200, 18), bold=True))
+        scanning.addSubview_(label("Ignore anything smaller than", NSMakeRect(24, 116, 190, 18)))
         self.min_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(220, 139, 120, 26), False
+            NSMakeRect(220, 111, 120, 26), False
         )
         self.min_popup.addItemsWithTitles_(['0.5"', '1"', '1.5"', '2"'])
         self.min_popup.setTarget_(self)
         self.min_popup.setAction_("changed:")
-        view.addSubview_(self.min_popup)
+        scanning.addSubview_(self.min_popup)
 
         self.deskew_box = checkbox(
-            "Straighten crooked photos", NSMakeRect(24, 110, 300, 20), self, "changed:"
+            "Straighten crooked photos", NSMakeRect(24, 84, 300, 20), self, "changed:"
         )
         self.trim_box = checkbox(
-            "Trim leftover scanner background", NSMakeRect(24, 86, 300, 20), self, "changed:"
+            "Trim leftover scanner background", NSMakeRect(24, 60, 300, 20), self, "changed:"
         )
         self.keep_box = checkbox(
-            "Keep the full scan as well", NSMakeRect(24, 62, 300, 20), self, "changed:"
+            "Keep the full scan as well", NSMakeRect(24, 36, 300, 20), self, "changed:"
         )
         self.preview_box = checkbox(
-            "Save a marked-up preview of each scan", NSMakeRect(24, 38, 340, 20), self, "changed:"
+            "Save a marked-up preview of each scan", NSMakeRect(24, 12, 340, 20), self, "changed:"
         )
+        for box in (self.deskew_box, self.trim_box, self.keep_box, self.preview_box):
+            scanning.addSubview_(box)
+
+        # -- the second page ------------------------------------------------
+        self.correction_heading = label(
+            "Correction", NSMakeRect(24, 344, 400, 18), bold=True
+        )
+        after.addSubview_(self.correction_heading)
+
+        self.invert_box = checkbox(
+            "Negatives — turn them into positives",
+            NSMakeRect(24, 314, 340, 20), self, "changed:",
+        )
+        after.addSubview_(self.invert_box)
+
+        self.dust_box = checkbox(
+            "Remove dust specks", NSMakeRect(24, 286, 200, 20), self, "changed:"
+        )
+        after.addSubview_(self.dust_box)
+        self.dust_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+            NSMakeRect(228, 281, 120, 26), False
+        )
+        self.dust_popup.addItemsWithTitles_([s.capitalize() for s in DUST_STRENGTHS])
+        self.dust_popup.setTarget_(self)
+        self.dust_popup.setAction_("changed:")
+        after.addSubview_(self.dust_popup)
+        self.dust_note = label("", NSMakeRect(24, 262, 400, 18), secondary=True)
+        after.addSubview_(self.dust_note)
+
+        after.addSubview_(label("Finishing", NSMakeRect(24, 220, 200, 18), bold=True))
         self.reveal_box = checkbox(
-            "Open the folder when a scan finishes", NSMakeRect(24, 14, 340, 20), self, "changed:"
+            "Open the folder when a scan finishes", NSMakeRect(24, 192, 340, 20), self, "changed:"
         )
-        for box in (
-            self.deskew_box,
-            self.trim_box,
-            self.keep_box,
-            self.preview_box,
-            self.reveal_box,
-        ):
-            view.addSubview_(box)
+        after.addSubview_(self.reveal_box)
+
+        after.addSubview_(
+            label(
+                "These apply to the selected mode, and are done to the saved scan"
+                " rather than to the scanner.",
+                NSMakeRect(24, 12, 410, 34), secondary=True,
+            )
+        )
 
         self._load()
         return self
+
+    @objc.python_method
+    def _page(self, tabs, title: str):
+        """One tab, and the view its controls go on."""
+        item = NSTabViewItem.alloc().initWithIdentifier_(title)
+        item.setLabel_(title)
+        tabs.addTabViewItem_(item)
+        return item.view()
 
     @objc.python_method
     def show(self) -> None:
@@ -846,7 +882,17 @@ class PreferencesWindow(NSObject):
         usable = prefs.dust_available()
         self.dust_box.setState_(1 if (prefs.get("dust") and usable) else 0)
         self.dust_box.setEnabled_(usable)
-        self.dust_note.setStringValue_("" if usable else f"needs {DUST_MIN_DPI} dpi or better")
+        strength = str(prefs.get("dustStrength"))
+        if strength in DUST_STRENGTHS:
+            self.dust_popup.selectItemAtIndex_(DUST_STRENGTHS.index(strength))
+        self.dust_popup.setEnabled_(usable and bool(self.dust_box.state()))
+        self.correction_heading.setStringValue_(f"Correction — {MODE_LABELS[prefs.mode]}")
+        self.dust_note.setStringValue_(
+            ""
+            if usable
+            else f"Dust removal needs {DUST_MIN_DPI} dpi or better: below that a"
+            " speck cannot be told from film grain."
+        )
         # Slide film in uncut strips is not a negative, and a print never is.
         self.invert_box.setEnabled_(prefs.mode != PRINT)
         self.deskew_box.setState_(1 if prefs["deskew"] else 0)
@@ -868,6 +914,9 @@ class PreferencesWindow(NSObject):
         prefs["colour"] = bool(self.colour_box.state())
         prefs.set("invert", bool(self.invert_box.state()))
         prefs.set("dust", bool(self.dust_box.state()))
+        index = self.dust_popup.indexOfSelectedItem()
+        if 0 <= index < len(DUST_STRENGTHS):
+            prefs.set("dustStrength", DUST_STRENGTHS[index])
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())

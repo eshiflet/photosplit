@@ -41,7 +41,9 @@ opens when it is done. Then load the next batch and press it again.
 Each mode keeps its own settings, because what is right for a print is wrong
 for a 35 mm frame.
 
-Everything adjustable is in **Preferences** (⌘,):
+Everything adjustable is in **Preferences** (⌘,), on two pages. **Scanning**
+is how the scan is made; **Post-Processing** is what is done to it afterwards,
+on the saved file rather than by the scanner. Both are per mode.
 
 | Setting | Default |
 | --- | --- |
@@ -53,7 +55,8 @@ Everything adjustable is in **Preferences** (⌘,):
 | JPEG quality | 95. Measured at ~49 dB PSNR against the uncompressed crop, so it is visually transparent; 100 costs about 2.4x the file size for ~3 dB. For analysis work choose PNG or TIFF instead and skip the question |
 | Scan in colour | on |
 | Ignore anything smaller than | 1 inch for prints, 0.5 for film — a 35 mm frame is 0.94 in on its short side, so the print threshold would discard every one |
-| Negatives — turn them into positives | on for film, off for prints and slides |
+| Negatives — turn them into positives | Post-Processing. On for film, off for prints and slides |
+| Remove dust specks | Post-Processing. Off by default, and unavailable below 1200 dpi — under that a speck cannot be told from film grain, and what it finds in a lawn is the clover |
 | Straighten crooked photos | on |
 | Trim leftover scanner background | on |
 | Keep the full scan as well | off |

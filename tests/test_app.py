@@ -439,6 +439,53 @@ class PreferencesTest(AppTestCase):
             self.delegate.prefs, self.delegate
         )
 
+    def test_preferences_has_a_scanning_and_a_post_processing_page(self) -> None:
+        tabs = [
+            v for v in self.prefs_window.window.contentView().subviews()
+            if hasattr(v, "tabViewItems")
+        ]
+        self.assertTrue(tabs, "no tabbed pages")
+        titles = [str(item.label()) for item in tabs[0].tabViewItems()]
+        self.assertEqual(titles, ["Scanning", "Post-Processing"])
+
+    def test_correction_controls_live_on_the_post_processing_page(self) -> None:
+        tabs = [
+            v for v in self.prefs_window.window.contentView().subviews()
+            if hasattr(v, "tabViewItems")
+        ][0]
+        after = tabs.tabViewItems()[1].view()
+
+        def holds(view, wanted) -> bool:
+            return any(sub is wanted for sub in view.subviews())
+
+        for control in (self.prefs_window.invert_box, self.prefs_window.dust_box,
+                        self.prefs_window.dust_popup):
+            with self.subTest(control=str(control.__class__)):
+                self.assertTrue(holds(after, control), "correction control is on the wrong page")
+        self.assertFalse(holds(after, self.prefs_window.res_popup))
+
+    def test_no_two_controls_sit_on_top_of_each_other(self) -> None:
+        # A checkbox was once dropped straight onto a section heading. Frames
+        # on the same page must not overlap.
+        tabs = [
+            v for v in self.prefs_window.window.contentView().subviews()
+            if hasattr(v, "tabViewItems")
+        ][0]
+        for item in tabs.tabViewItems():
+            boxes = [(str(v.__class__), v.frame()) for v in item.view().subviews()]
+            for i, (name_a, a) in enumerate(boxes):
+                for name_b, b in boxes[i + 1:]:
+                    overlap_x = min(a.origin.x + a.size.width, b.origin.x + b.size.width) - max(
+                        a.origin.x, b.origin.x
+                    )
+                    overlap_y = min(a.origin.y + a.size.height, b.origin.y + b.size.height) - max(
+                        a.origin.y, b.origin.y
+                    )
+                    self.assertFalse(
+                        overlap_x > 2 and overlap_y > 2,
+                        f"{name_a} overlaps {name_b} on {item.label()}",
+                    )
+
     def test_every_control_is_offered(self) -> None:
         self.assertEqual(
             titles(self.prefs_window.res_popup),
