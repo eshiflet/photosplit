@@ -48,12 +48,36 @@ class SplitResult:
         return len(self.photos)
 
 
-def load_scan(path: Path, dpi_override: float | None = None) -> tuple[np.ndarray, float]:
-    """Read a scan as BGR, along with the resolution it was scanned at."""
+def load_scan(
+    path: Path, dpi_override: float | None = None, keep_depth: bool = False
+) -> tuple[np.ndarray, float]:
+    """Read a scan as BGR, along with the resolution it was scanned at.
+
+    Eight bits per channel unless asked otherwise, because everything that
+    measures a scan — the detector's thresholds, the quality tools — is
+    written in levels out of 255. `keep_depth` hands back what the file
+    actually holds, for the one caller that writes the pixels out again.
+    """
     with Image.open(path) as image:
         dpi = dpi_override or _dpi_from(image)
-        rgb = np.asarray(image.convert("RGB"))
-    return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), dpi
+        if not keep_depth:
+            return cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2BGR), dpi
+
+    # Pillow cannot read 16-bit colour; OpenCV can, and hands back BGR already.
+    deep = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    if deep is None or deep.dtype != np.uint16:
+        with Image.open(path) as image:
+            return cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2BGR), dpi
+    if deep.ndim == 2:
+        deep = cv2.cvtColor(deep, cv2.COLOR_GRAY2BGR)
+    return deep[:, :, :3], dpi
+
+
+def eight_bit(bgr: np.ndarray) -> np.ndarray:
+    """The same picture in levels out of 255, for anything that measures it."""
+    if bgr.dtype != np.uint16:
+        return bgr
+    return (bgr.astype(np.uint32) >> 8).astype(np.uint8)
 
 
 def _dpi_from(image: Image.Image) -> float:
@@ -70,9 +94,12 @@ def split_scan(
     write: bool = True,
 ) -> SplitResult:
     """Find every photo in one scan and write each to its own file."""
-    bgr, dpi = load_scan(path, options.dpi_override)
+    bgr, dpi = load_scan(path, options.dpi_override, keep_depth=True)
+    # Find the photos in an eight-bit view, cut them out of the real one: every
+    # threshold in the detector is a number of levels out of 255.
+    view = eight_bit(bgr)
     photos, background = find_photos(
-        bgr,
+        view,
         dpi=dpi,
         min_side_in=options.min_size,
         min_fill=options.min_fill,
@@ -92,7 +119,7 @@ def split_scan(
     if options.preview:
         result.preview_path = out_dir / f"{stem}-preview.jpg"
         if write:
-            extract.save(extract.preview(bgr, photos), result.preview_path, dpi, quality=88)
+            extract.save(extract.preview(view, photos), result.preview_path, dpi, quality=88)
 
     for index, photo in enumerate(photos, start=1):
         target = out_dir / f"{stem}-{index:02d}.{options.fmt}"

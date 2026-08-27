@@ -41,8 +41,9 @@ Everything adjustable is in **Preferences** (⌘,):
 | Setting | Default |
 | --- | --- |
 | Save photos to | `~/Pictures/Photosplit` |
-| Resolution | 600 dpi — good for prints you may enlarge or analyse; 300 is fine for quick copies, 1200 is slow and rarely worth it |
-| Save as | JPEG, PNG (lossless), or TIFF (lossless) |
+| Resolution | Per mode. 600 dpi for prints; 2400 for film, where the frame is 35 mm wide and needs it |
+| Save as | PNG (lossless) by default; JPEG or TIFF if you prefer |
+| Depth | 16-bit. Pillow cannot write 16-bit colour at all, so these are written through OpenCV, with the resolution added to the PNG afterwards |
 | JPEG quality | 95. Measured at ~49 dB PSNR against the uncompressed crop, so it is visually transparent; 100 costs about 2.4x the file size for ~3 dB. For analysis work choose PNG or TIFF instead and skip the question |
 | Scan in colour | on |
 | Ignore anything smaller than | 1 inch — raises this to reject dust |

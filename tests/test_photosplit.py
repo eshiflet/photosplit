@@ -14,6 +14,7 @@ from PIL import Image
 from photosplit import extract
 from photosplit.cli import main
 from photosplit.detect import find_photos
+from photosplit.split import SplitOptions, eight_bit, load_scan, split_scan
 from tests.make_scan import BLEEDING, SEPARATED, TOUCHING, make
 
 DPI = 300
@@ -244,6 +245,88 @@ class NeutraliseTest(unittest.TestCase):
             b = cv2.imread(str(untouched)).reshape(-1, 3).mean(axis=0)
             # Red was the channel held down, so it is the one that comes back.
             self.assertGreater(a[2], b[2])
+
+
+class SixteenBitTest(unittest.TestCase):
+    """A deeper scan has to stay deeper all the way to the file.
+
+    Pillow cannot write 16-bit colour at all, so the old path silently
+    truncated to 8 -- which is exactly the range an inverted negative needs.
+    """
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-16-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        self.eight = self.dir / "eight.png"
+        make(self.eight, SEPARATED)
+        self.deep = self.dir / "deep.tif"
+        cv2.imwrite(
+            str(self.deep),
+            cv2.imread(str(self.eight)).astype(np.uint16) * 257,
+            [cv2.IMWRITE_TIFF_XDPI, DPI, cv2.IMWRITE_TIFF_YDPI, DPI],
+        )
+
+    def test_a_deep_scan_is_read_at_its_own_depth(self) -> None:
+        kept, _ = load_scan(self.deep, DPI, keep_depth=True)
+        self.assertEqual(kept.dtype, np.uint16)
+        # And flattened for anything that measures in levels out of 255.
+        flat, _ = load_scan(self.deep, DPI)
+        self.assertEqual(flat.dtype, np.uint8)
+
+    def test_crops_from_a_deep_scan_are_deep(self) -> None:
+        result = split_scan(
+            self.deep,
+            SplitOptions(output_dir=self.dir / "out", fmt="png", dpi_override=DPI),
+        )
+        self.assertEqual(result.count, len(SEPARATED))
+        for path in result.written:
+            written = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+            self.assertEqual(written.dtype, np.uint16, f"{path.name} lost its depth")
+
+    def test_a_deep_crop_still_carries_its_resolution(self) -> None:
+        # PNG keeps resolution in whole pixels per metre, so it comes back a
+        # hair off a round number; that is the format, not a mistake.
+        crop = (np.random.default_rng(3).random((40, 60, 3)) * 65535).astype(np.uint16)
+        for suffix in (".png", ".tif"):
+            with self.subTest(suffix=suffix):
+                path = self.dir / f"deep{suffix}"
+                extract.save(crop, path, 600)
+                self.assertAlmostEqual(Image.open(path).info["dpi"][0], 600, delta=0.01)
+                back = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+                self.assertEqual(back.dtype, np.uint16)
+                self.assertTrue(bool((back == crop).all()), "not written losslessly")
+
+    def test_a_deep_crop_asked_for_as_jpeg_is_rounded_not_refused(self) -> None:
+        crop = (np.random.default_rng(4).random((40, 60, 3)) * 65535).astype(np.uint16)
+        path = self.dir / "deep.jpg"
+        extract.save(crop, path, 600)
+        self.assertEqual(cv2.imread(str(path), cv2.IMREAD_UNCHANGED).dtype, np.uint8)
+
+    def test_eight_bit_scans_are_untouched_by_any_of_this(self) -> None:
+        result = split_scan(
+            self.eight,
+            SplitOptions(output_dir=self.dir / "shallow", fmt="png", dpi_override=DPI),
+        )
+        self.assertEqual(result.count, len(SEPARATED))
+        for path in result.written:
+            self.assertEqual(cv2.imread(str(path), cv2.IMREAD_UNCHANGED).dtype, np.uint8)
+
+    def test_trimming_and_balancing_work_at_either_depth(self) -> None:
+        for scan in (self.eight, self.deep):
+            with self.subTest(scan=scan.name):
+                bgr, _ = load_scan(scan, DPI, keep_depth=True)
+                view = eight_bit(bgr)
+                photos, background = find_photos(view, dpi=DPI)
+                self.assertTrue(photos)
+
+                balanced = extract.neutralise(bgr, background)
+                self.assertEqual(balanced.dtype, bgr.dtype)
+
+                crop = extract.deskew_crop(bgr, photos[0])
+                trimmed = extract.trim_background(crop, background, DPI)
+                self.assertEqual(trimmed.dtype, bgr.dtype)
+                self.assertLessEqual(trimmed.shape[0], crop.shape[0])
+                self.assertGreater(trimmed.size, 0)
 
 
 class CommandLineTest(unittest.TestCase):

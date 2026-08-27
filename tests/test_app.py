@@ -273,7 +273,7 @@ class SplitPathTest(AppTestCase):
         finished = run_loop_until(lambda: not self.delegate.busy, 60.0)
 
         self.assertTrue(finished, "split never finished")
-        written = sorted((self.dir / "out").glob("bench-*.jpg"))
+        written = sorted((self.dir / "out").glob("bench-*.png"))
         self.assertEqual(len(written), 4)
         self.assertTrue(self.scan.exists(), "a dropped file must not be deleted")
         self.assertIn("4 photo(s)", self.delegate.status.stringValue())
@@ -283,14 +283,14 @@ class SplitPathTest(AppTestCase):
         run_loop_until(lambda: not self.delegate.busy, 60.0)
         log = str(self.delegate.log_view.string())
         for index in range(1, 5):
-            self.assertIn(f"bench-{index:02d}.jpg", log)
+            self.assertIn(f"bench-{index:02d}.png", log)
 
     def test_a_scanned_file_is_discarded_once_split(self) -> None:
         self.delegate.prefs["keepFullScan"] = False
         self.delegate._run_split([self.scan], source="scanned", dpi=300)
         run_loop_until(lambda: not self.delegate.busy, 60.0)
         self.assertFalse(self.scan.exists(), "the temporary full scan should be gone")
-        self.assertEqual(len(list((self.dir / "out").glob("bench-*.jpg"))), 4)
+        self.assertEqual(len(list((self.dir / "out").glob("bench-*.png"))), 4)
 
     def test_keeping_the_full_scan_leaves_it_alone(self) -> None:
         self.delegate.prefs["keepFullScan"] = True
@@ -436,16 +436,21 @@ class PreferencesTest(AppTestCase):
         self.assertEqual(int(prefs.get("resolution", prefs_module.NEGATIVE)), 3200)
         self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 300)
 
-    def test_film_defaults_are_the_ones_film_needs(self) -> None:
+    def test_every_mode_captures_deep_and_saves_lossless(self) -> None:
+        prefs = self.delegate.prefs
+        for mode in prefs_module.MODES:
+            with self.subTest(mode=mode):
+                self.assertEqual(int(prefs.get("bitDepth", mode)), 16)
+                self.assertEqual(str(prefs.get("format", mode)), "png")
+
+    def test_film_keeps_frames_a_print_threshold_would_discard(self) -> None:
+        # A 35 mm frame is 0.94 in on its short side, so the print default of
+        # 1.0 would throw every frame away as too small.
         prefs = self.delegate.prefs
         for mode in (prefs_module.NEGATIVE, prefs_module.SLIDE):
             with self.subTest(mode=mode):
-                self.assertEqual(int(prefs.get("bitDepth", mode)), 16)
-                self.assertEqual(str(prefs.get("format", mode)), "tif")
-                # A 35 mm frame is 0.94 in on its short side, so the print
-                # default of 1.0 would discard every frame as too small.
                 self.assertLess(float(prefs.get("minSize", mode)), 0.94)
-        self.assertEqual(int(prefs.get("bitDepth", prefs_module.PRINT)), 8)
+        self.assertGreaterEqual(float(prefs.get("minSize", prefs_module.PRINT)), 1.0)
 
     def test_depth_is_offered_only_where_it_can_survive(self) -> None:
         window = self.prefs_window
@@ -477,7 +482,7 @@ class PreferencesTest(AppTestCase):
     def test_the_window_shows_the_current_settings(self) -> None:
         self.delegate.prefs["resolution"] = 600
         self.delegate.prefs["quality"] = 98
-        self.delegate.prefs["format"] = "jpg"
+        self.delegate.prefs.set("format", "jpg")
         self.delegate._refresh_footer()
         shown = str(self.delegate.settings_label.stringValue())
         self.assertIn("600 dpi", shown)

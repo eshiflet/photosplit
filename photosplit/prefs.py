@@ -21,14 +21,15 @@ MODE_ACTIONS = {
 }
 
 MODE_DEFAULTS: dict[str, dict[str, object]] = {
-    # A print is opaque and reflective; 600 dpi and 8 bits is plenty.
-    PRINT: {"resolution": 600, "bitDepth": 8, "format": "jpg", "minSize": 1.0},
+    # PNG throughout: lossless, holds 16 bits per channel, one format to think
+    # about. 600 dpi is plenty for an opaque print.
+    PRINT: {"resolution": 600, "bitDepth": 16, "format": "png", "minSize": 1.0},
     # Film is inverted afterwards, which stretches the shadows hard enough to
-    # band 8-bit data, so 16 bits and a lossless format. 2400 rather than the
+    # band 8-bit data. 2400 rather than the
     # 6400 the V500 advertises: a full strip at 6400 in 16-bit is 5.8 GB, and
     # the measured edge spread says the optics do not resolve anywhere near it.
-    NEGATIVE: {"resolution": 2400, "bitDepth": 16, "format": "tif", "minSize": 0.5},
-    SLIDE: {"resolution": 2400, "bitDepth": 16, "format": "tif", "minSize": 0.5},
+    NEGATIVE: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5},
+    SLIDE: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5},
 }
 
 # A 35 mm frame is 0.94 x 1.42 in, so the print default of 1.0 in would throw

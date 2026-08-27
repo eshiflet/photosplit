@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import zlib
 from pathlib import Path
 
 import cv2
@@ -72,8 +73,12 @@ def trim_background(
     if crop.size == 0:
         return crop
     h, w = crop.shape[:2]
-    diff = np.abs(crop.astype(np.int16) - background.astype(np.int16)).max(axis=2)
-    is_bg = diff <= tolerance
+    # The background was measured on an eight-bit view of the scan; a deeper
+    # crop needs it, and the tolerance with it, on the same scale.
+    scale = 257 if crop.dtype == np.uint16 else 1
+    reference = np.asarray(background, dtype=np.int32) * scale
+    diff = np.abs(crop.astype(np.int32) - reference).max(axis=2)
+    is_bg = diff <= tolerance * scale
 
     def leading(profile: np.ndarray, limit: int) -> int:
         n = 0
@@ -114,6 +119,9 @@ def neutralise(bgr: np.ndarray, background: np.ndarray) -> np.ndarray:
     # correction never darkens the scan. The gains are small either way.
     gain = bg.max() / bg
 
+    if bgr.dtype == np.uint16:
+        return _gain_deep(bgr, gain)
+
     ramp = np.arange(256, dtype=np.float64)
     table = np.empty((1, 256, 3), dtype=np.uint8)
     for channel in range(3):
@@ -121,14 +129,78 @@ def neutralise(bgr: np.ndarray, background: np.ndarray) -> np.ndarray:
     return cv2.LUT(bgr, table)
 
 
+def _gain_deep(bgr: np.ndarray, gain: np.ndarray) -> np.ndarray:
+    """The same correction on 16-bit pixels, where no lookup table fits.
+
+    A band at a time: promoting a whole 16-bit film strip to float to multiply
+    it would cost more memory than the split it is part of.
+    """
+    out = np.empty_like(bgr)
+    rows = max(1, (1 << 22) // max(1, bgr.shape[1] * bgr.shape[2]))
+    for start in range(0, bgr.shape[0], rows):
+        band = bgr[start : start + rows].astype(np.float32)
+        band *= gain.astype(np.float32)
+        np.clip(band, 0, 65535, out=band)
+        out[start : start + rows] = band.astype(np.uint16)
+    return out
+
+
 def save(crop: np.ndarray, path: Path, dpi: float, quality: int = JPEG_QUALITY) -> None:
     """Write a crop, tagging it with the scan's resolution."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    jpeg = path.suffix.lower() in {".jpg", ".jpeg"}
+
+    if crop.dtype == np.uint16 and not jpeg:
+        _save_deep(crop, path, dpi)
+        return
+    if crop.dtype == np.uint16:
+        # A JPEG has nowhere to put the extra bits; say so by rounding rather
+        # than by failing, since the depth is a scanner setting and the format
+        # is a separate one.
+        crop = (crop.astype(np.uint32) >> 8).astype(np.uint8)
+
     image = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
     params: dict = {"dpi": (dpi, dpi)}
-    if path.suffix.lower() in {".jpg", ".jpeg"}:
+    if jpeg:
         params.update(quality=quality, subsampling=0)
-    path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path, **params)
+
+
+def _save_deep(crop: np.ndarray, path: Path, dpi: float) -> None:
+    """Write 16-bit pixels, which Pillow cannot do for colour at all.
+
+    OpenCV writes them losslessly and tags a TIFF's resolution, but writes no
+    resolution into a PNG, so that one is added afterwards. Every file this
+    project writes carries the resolution it was scanned at; a deeper file is
+    not an excuse to drop it.
+    """
+    resolution = int(round(dpi))
+    if path.suffix.lower() in {".tif", ".tiff"}:
+        cv2.imwrite(
+            str(path),
+            crop,
+            [cv2.IMWRITE_TIFF_XDPI, resolution, cv2.IMWRITE_TIFF_YDPI, resolution],
+        )
+        return
+    cv2.imwrite(str(path), crop)
+    _write_png_resolution(path, dpi)
+
+
+def _write_png_resolution(path: Path, dpi: float) -> None:
+    """Put a pHYs chunk into a PNG, which is where a PNG keeps its resolution."""
+    raw = path.read_bytes()
+    signature, rest = raw[:8], raw[8:]
+    # IHDR is always the first chunk, and pHYs need only come before the image
+    # data, so directly after it is both legal and easy to find.
+    length = int.from_bytes(rest[:4], "big")
+    end = 4 + 4 + length + 4
+    header, remainder = rest[:end], rest[end:]
+
+    per_metre = int(round(dpi / 0.0254))
+    payload = b"pHYs" + per_metre.to_bytes(4, "big") + per_metre.to_bytes(4, "big") + b"\x01"
+    chunk = len(payload[4:]).to_bytes(4, "big") + payload
+    chunk += (zlib.crc32(payload) & 0xFFFFFFFF).to_bytes(4, "big")
+    path.write_bytes(signature + header + chunk + remainder)
 
 
 def preview(bgr: np.ndarray, photos: list[Photo]) -> np.ndarray:
