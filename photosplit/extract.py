@@ -57,6 +57,10 @@ def deskew_crop(bgr: np.ndarray, photo: Photo, pad: int = 8) -> np.ndarray:
     )
 
 
+DARK_BACKGROUND = 64  # below this the original sat in a holder, not on a lid
+HOLDER_TRIM_IN = 0.05  # a mount edge shadows further than a rounding error
+
+
 def trim_background(
     crop: np.ndarray,
     background: np.ndarray,
@@ -64,11 +68,18 @@ def trim_background(
     tolerance: int = 14,
     max_trim_in: float = 0.02,
 ) -> np.ndarray:
-    """Shave any leftover lid-coloured sliver off the four edges.
+    """Shave any leftover background off the four edges.
 
-    The detected rectangle is already accurate, so this only has rounding error
-    to clean up. The limit is deliberately about a millimetre: a print with a
-    white border must come out with that border intact, not silently cropped.
+    On a lid this only has rounding error to clean up, and the limit is
+    deliberately about a millimetre: a print with a white border must come out
+    with that border intact, not silently cropped.
+
+    In a holder there is no such thing to protect. Anything the colour of the
+    background at the edge of a slide is mount, and a mount is thick enough to
+    shadow the aperture — measured at three to twelve pixels of ramp at 600
+    dpi, values sitting between the mount and the picture and belonging to
+    neither. Those get taken too, out to a wider limit, because nothing at that
+    edge can be part of the photograph.
     """
     if crop.size == 0:
         return crop
@@ -92,6 +103,48 @@ def trim_background(
     bottom = leading(rows[::-1], min(limit, h // 4))
     left = leading(cols, min(limit, w // 4))
     right = leading(cols[::-1], min(limit, w // 4))
+    crop = crop[top : h - bottom, left : w - right]
+
+    if float(np.mean(reference)) / scale <= DARK_BACKGROUND:
+        crop = _trim_holder_shadow(crop, background, dpi, scale)
+    return crop
+
+
+def _trim_holder_shadow(
+    crop: np.ndarray, background: np.ndarray, dpi: float, scale: float
+) -> np.ndarray:
+    """Take the ramp where a mount's edge shades into the picture.
+
+    A row belongs to the shadow while it is still nearer the background than
+    the picture. Measuring the picture from the middle of the crop rather than
+    assuming a level keeps a dark photograph from being eaten.
+    """
+    if crop.size == 0:
+        return crop
+    h, w = crop.shape[:2]
+    if h < 8 or w < 8:
+        return crop
+
+    grey = crop.mean(axis=2)
+    floor = float(np.mean(background)) * scale
+    picture = float(np.median(grey[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]))
+    if picture <= floor:
+        return crop
+    halfway = floor + (picture - floor) * 0.5
+
+    limit = max(1, int(round(HOLDER_TRIM_IN * dpi)))
+
+    def shadow(profile: np.ndarray, cap: int) -> int:
+        count = 0
+        while count < cap and profile[count] < halfway:
+            count += 1
+        return count
+
+    rows, cols = grey.mean(axis=1), grey.mean(axis=0)
+    top = shadow(rows, min(limit, h // 4))
+    bottom = shadow(rows[::-1], min(limit, h // 4))
+    left = shadow(cols, min(limit, w // 4))
+    right = shadow(cols[::-1], min(limit, w // 4))
     return crop[top : h - bottom, left : w - right]
 
 

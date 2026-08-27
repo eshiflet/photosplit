@@ -247,6 +247,66 @@ class NeutraliseTest(unittest.TestCase):
             self.assertGreater(a[2], b[2])
 
 
+class HolderTrimTest(unittest.TestCase):
+    """A mount is thick, and its edge shadows the picture it surrounds."""
+
+    @staticmethod
+    def mounted(ramp: int = 10, picture: int = 120, floor: int = 4) -> np.ndarray:
+        """A crop as it comes off a slide: shadow ramping up into the picture."""
+        crop = np.full((200, 160, 3), picture, np.uint8)
+        for step in range(ramp):
+            level = int(floor + (picture - floor) * step / ramp)
+            crop[step, :] = level
+            crop[-1 - step, :] = level
+            crop[:, step] = level
+            crop[:, -1 - step] = level
+        return crop
+
+    def test_the_shadow_of_a_mount_is_taken_off(self) -> None:
+        crop = self.mounted(ramp=10)
+        trimmed = extract.trim_background(crop, np.array([4.0, 4.0, 4.0]), DPI)
+        self.assertLess(trimmed.shape[0], crop.shape[0])
+        edge = np.concatenate(
+            [trimmed[0], trimmed[-1], trimmed[:, 0], trimmed[:, -1]]
+        )
+        self.assertGreater(float(edge.mean()), 60.0, "shadow still on the edge")
+
+    def test_a_white_border_on_a_lid_is_still_kept(self) -> None:
+        # The reason the shadow trim only runs against a dark background: on a
+        # lid, background-coloured edge is often the print's own white border,
+        # and taking it would be silently cropping the photograph.
+        lid = 242
+        crop = np.full((200, 160, 3), 90, np.uint8)
+        border = 16
+        crop[:border], crop[-border:] = 250, 250
+        crop[:, :border], crop[:, -border:] = 250, 250
+
+        trimmed = extract.trim_background(crop, np.array([float(lid)] * 3), DPI)
+
+        # The conservative trim takes about a millimetre off each side and no
+        # more, so most of the border is still there. What must not happen is
+        # the shadow trim running and taking the lot.
+        millimetre = int(round(0.02 * DPI))
+        self.assertGreaterEqual(trimmed.shape[1], crop.shape[1] - 2 * millimetre)
+        edge = np.concatenate(
+            [trimmed[0], trimmed[-1], trimmed[:, 0], trimmed[:, -1]]
+        )
+        self.assertGreater(float(edge.mean()), 200.0, "the white border was cropped")
+
+    def test_a_dark_photograph_is_not_eaten(self) -> None:
+        # The picture level is measured from the middle rather than assumed, so
+        # a genuinely dark frame keeps its edges.
+        crop = self.mounted(ramp=4, picture=30)
+        trimmed = extract.trim_background(crop, np.array([4.0, 4.0, 4.0]), DPI)
+        self.assertGreater(trimmed.shape[0], crop.shape[0] * 0.8)
+        self.assertGreater(trimmed.size, 0)
+
+    def test_a_crop_that_is_all_shadow_survives(self) -> None:
+        flat = np.full((60, 60, 3), 6, np.uint8)
+        trimmed = extract.trim_background(flat, np.array([4.0, 4.0, 4.0]), DPI)
+        self.assertGreater(trimmed.size, 0, "trimmed a crop away to nothing")
+
+
 class SixteenBitTest(unittest.TestCase):
     """A deeper scan has to stay deeper all the way to the file.
 

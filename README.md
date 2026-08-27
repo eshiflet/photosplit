@@ -139,6 +139,7 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | Small prints ignored | Ignore anything smaller than: 0.5" | `--min-size 0.6` |
 | Dust picked up as photos | Ignore anything smaller than: 1.5" | `--min-size 1.5` |
 | A white border got shaved off | Trim leftover background: off | `--no-trim` |
+| A slide keeps a black rim from its mount | Trim leftover background: on | (on by default) |
 | Crops look slightly rotated | Straighten: off | `--no-deskew` |
 | Everything has a colour tint | — | `--neutralise` |
 | A strip of film came out as one image | Scanning: Film | `--film` |
