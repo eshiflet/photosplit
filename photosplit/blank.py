@@ -202,6 +202,10 @@ def draw_map(path: Path, specks: list, margins: dict[str, float], out: Path, dpi
 
 CALIBRATION_JSON = "dust-map.json"
 CALIBRATION_MAP = "dust-map.png"
+# Enough runs to see which way the glass is going, few enough that the file
+# stays a fixed size. Index 0 is always the run the file describes.
+HISTORY_LIMIT = 5
+SUMMARY_KEYS = ("measured", "specks", "speck_area_pct", "largest_speck_mm")
 
 
 def calibration_folder() -> Path:
@@ -209,22 +213,39 @@ def calibration_folder() -> Path:
     return Path.home() / "Library" / "Application Support" / "Photosplit"
 
 
+def summarise(record: dict) -> dict:
+    """The few numbers worth carrying forward from a run."""
+    return {k: record.get(k) for k in SUMMARY_KEYS}
+
+
+def history_of(record: dict | None) -> list[dict]:
+    """Past runs, newest first, from a record written by any version of this."""
+    if record is None:
+        return []
+    kept = record.get("history")
+    if isinstance(kept, list) and kept:
+        return kept
+    # A record written before the history existed still describes one run, and
+    # may name the one before it.
+    older = [summarise(record)]
+    if isinstance(record.get("previous"), dict):
+        older.append(record["previous"])
+    return older
+
+
 def save_calibration(folder: Path, blank: Blank, specks: list, scan: Path) -> Path:
-    """Record this calibration, keeping the previous one to compare against."""
+    """Record this calibration on top of the last few, for the trend."""
     folder.mkdir(parents=True, exist_ok=True)
-    previous = load_calibration(folder)
     record = asdict(blank)
     record["measured"] = datetime.now().isoformat(timespec="seconds")
     record["specks_seen"] = [
         {"area_px": int(a), "x_in": round(x / blank.dpi, 3), "y_in": round(y / blank.dpi, 3)}
         for a, x, y, _ in specks[:200]
     ]
-    if previous is not None:
-        # Only the numbers, never the previous one's own history: keeping a
-        # chain of these would grow the file without bound.
-        record["previous"] = {
-            k: previous.get(k) for k in ("measured", "specks", "speck_area_pct", "largest_speck_mm")
-        }
+    # Newest first, this run included, capped: the file never grows.
+    record["history"] = ([summarise(record)] + history_of(load_calibration(folder)))[
+        :HISTORY_LIMIT
+    ]
     path = folder / CALIBRATION_JSON
     path.write_text(json.dumps(record, indent=2))
     draw_map(scan, specks, blank.falloff_in, folder / CALIBRATION_MAP, blank.dpi)
@@ -262,6 +283,14 @@ def verdict(blank: Blank, previous: dict | None) -> list[str]:
         else:
             change = f"about the same as last time ({previous['specks']} speck(s))"
         lines.append(f"  {change}")
+
+    # One comparison says whether the last thing helped; the run of them says
+    # whether the glass is drifting, which one number never can.
+    earlier = [h.get("specks") for h in history_of(previous)[: HISTORY_LIMIT - 1]]
+    earlier = [n for n in earlier if n is not None]
+    if len(earlier) >= 2:
+        counts = ", ".join(str(n) for n in [blank.specks] + earlier)
+        lines.append(f"  last {len(earlier) + 1} runs, newest first: {counts}")
 
     margin = max(blank.falloff_in.values())
     if margin >= 0.15:

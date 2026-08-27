@@ -191,6 +191,38 @@ class WindowTest(AppTestCase):
         self.assertTrue(self.delegate.respondsToSelector_("calibrate:"))
         self.assertTrue(button.toolTip())
 
+    def test_confirming_names_the_action_not_continue(self) -> None:
+        # A button is read on its own, and on its own "Continue" says nothing
+        # about what is about to happen to the glass.
+        seen = {}
+
+        def fake(title, message, go):
+            seen.update(title=title, message=message, go=go)
+            return False
+
+        original = self.delegate._confirm
+        try:
+            self.delegate._confirm = fake
+            self.delegate.devices = [object()]
+            self.delegate.calibrate_(None)
+        finally:
+            self.delegate._confirm = original
+            self.delegate.devices = []
+        self.assertEqual(seen.get("go"), "Run Calibration")
+        self.assertNotIn("continue", seen.get("message", "").lower())
+
+    def test_preferences_closes_so_the_log_is_visible(self) -> None:
+        # The progress and the verdict are written to the main window's log,
+        # which is no use behind the Preferences window.
+        window = PreferencesWindow.alloc().initWithPrefs_owner_(self.delegate.prefs, self.delegate)
+        self.delegate.prefs_window = window
+        window.show()
+        self.assertTrue(window.window.isVisible())
+
+        self.delegate._close_preferences()
+        self.assertFalse(window.window.isVisible())
+        self.assertTrue(self.delegate.window.isVisible())
+
     def test_calibrating_without_a_scanner_does_nothing(self) -> None:
         # No scanner is attached in the tests; this must not raise or prompt.
         self.assertFalse(self.delegate.devices)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -128,7 +129,7 @@ class CalibrationTest(unittest.TestCase):
         self.assertEqual(len(loaded["specks_seen"]), blank.specks)
         self.assertTrue((self.store / scan_blank.CALIBRATION_MAP).exists())
 
-    def test_the_previous_calibration_is_kept_for_comparison(self) -> None:
+    def test_the_run_before_is_kept_for_comparison(self) -> None:
         first, first_specks = self.measure_bed("first.png", 10)
         scan_blank.save_calibration(self.store, first, first_specks, self.dir / "first.png")
         second, second_specks = self.measure_bed("second.png", 3)
@@ -136,9 +137,59 @@ class CalibrationTest(unittest.TestCase):
 
         loaded = scan_blank.load_calibration(self.store)
         self.assertEqual(loaded["specks"], second.specks)
-        self.assertEqual(loaded["previous"]["specks"], first.specks)
-        # One generation only; a chain of these would grow without bound.
-        self.assertNotIn("previous", loaded["previous"])
+        self.assertEqual(loaded["history"][0]["specks"], second.specks)
+        self.assertEqual(loaded["history"][1]["specks"], first.specks)
+
+    def test_history_keeps_five_runs_and_stops(self) -> None:
+        for run in range(8):
+            blank, specks = self.measure_bed(f"run{run}.png", run + 1)
+            scan_blank.save_calibration(self.store, blank, specks, self.dir / f"run{run}.png")
+
+        loaded = scan_blank.load_calibration(self.store)
+        history = loaded["history"]
+        self.assertEqual(len(history), scan_blank.HISTORY_LIMIT)
+        # Newest first, and only the summary of each -- a run's own history is
+        # never nested inside another, or the file would grow without bound.
+        counts = [h["specks"] for h in history]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+        for entry in history:
+            self.assertNotIn("history", entry)
+            self.assertNotIn("specks_seen", entry)
+
+    def test_a_record_written_before_history_existed_still_works(self) -> None:
+        blank, specks = self.measure_bed("old.png", 4)
+        scan_blank.save_calibration(self.store, blank, specks, self.dir / "old.png")
+        path = self.store / scan_blank.CALIBRATION_JSON
+        stale = json.loads(path.read_text())
+        stale.pop("history")
+        stale["previous"] = {"measured": "2026-01-01T00:00:00", "specks": 99,
+                             "speck_area_pct": 0.9, "largest_speck_mm": 2.0}
+        path.write_text(json.dumps(stale))
+
+        newer, newer_specks = self.measure_bed("newer.png", 2)
+        scan_blank.save_calibration(self.store, newer, newer_specks, self.dir / "newer.png")
+        history = scan_blank.load_calibration(self.store)["history"]
+        self.assertEqual([h["specks"] for h in history], [newer.specks, blank.specks, 99])
+
+    def test_the_verdict_shows_the_run_of_recent_counts(self) -> None:
+        # One comparison says whether the last clean helped; the run of them
+        # says whether the glass is drifting.
+        for run, spots in enumerate((12, 9, 6)):
+            blank, specks = self.measure_bed(f"trend{run}.png", spots)
+            scan_blank.save_calibration(self.store, blank, specks, self.dir / f"trend{run}.png")
+
+        latest, _ = self.measure_bed("trend-now.png", 3)
+        lines = scan_blank.verdict(latest, scan_blank.load_calibration(self.store))
+        trend = [line for line in lines if "newest first" in line]
+        self.assertEqual(len(trend), 1)
+        self.assertIn(str(latest.specks), trend[0])
+
+    def test_no_trend_line_until_there_is_a_trend(self) -> None:
+        blank, specks = self.measure_bed("only.png", 5)
+        scan_blank.save_calibration(self.store, blank, specks, self.dir / "only.png")
+        later, _ = self.measure_bed("later.png", 4)
+        lines = scan_blank.verdict(later, scan_blank.load_calibration(self.store))
+        self.assertFalse(any("newest first" in line for line in lines))
 
     def test_a_missing_or_broken_calibration_is_not_fatal(self) -> None:
         self.assertIsNone(scan_blank.load_calibration(self.store))

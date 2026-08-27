@@ -60,6 +60,7 @@ SCANNING_TITLE = "Scanning…"
 # a speck count is only meaningful against the last one, and changing the
 # sampling underneath it would make every comparison a lie.
 CALIBRATION_DPI = 600
+CALIBRATE_TITLE = "Run Calibration"
 
 WINDOW_STYLE = (
     NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
@@ -312,10 +313,14 @@ class AppDelegate(NSObject):
             return
         if not self._confirm(
             "Calibrate the glass",
-            "Take everything off the glass and close the lid, then continue. "
-            "Photosplit will scan the empty bed and record what it finds.",
+            "Take everything off the glass and close the lid. Photosplit will "
+            "scan the empty bed and record what it finds.",
+            CALIBRATE_TITLE,
         ):
             return
+        # The progress and the verdict are written to the main window's log, so
+        # send the user there rather than leaving Preferences over the top of it.
+        self._close_preferences()
         device = self.devices[max(0, self.device_popup.indexOfSelectedItem())]
         settings = ScanSettings(
             resolution=CALIBRATION_DPI,
@@ -502,12 +507,16 @@ class AppDelegate(NSObject):
         alert.runModal()
 
     @objc.python_method
-    def _confirm(self, title: str, message: str) -> bool:
-        """Ask before something that needs the glass in a particular state."""
+    def _confirm(self, title: str, message: str, go: str) -> bool:
+        """Ask before something that needs the glass in a particular state.
+
+        The affirming button is named for the thing it starts, never "Continue":
+        the button is read on its own, and on its own "Continue" says nothing.
+        """
         alert = NSAlert.alloc().init()
         alert.setMessageText_(title)
         alert.setInformativeText_(message)
-        alert.addButtonWithTitle_("Continue")
+        alert.addButtonWithTitle_(go)
         alert.addButtonWithTitle_("Cancel")
         return int(alert.runModal()) == NSAlertFirstButtonReturn
 
@@ -515,6 +524,12 @@ class AppDelegate(NSObject):
         folder = self.prefs.output_folder
         folder.mkdir(parents=True, exist_ok=True)
         NSWorkspace.sharedWorkspace().openURL_(_url(folder))
+
+    @objc.python_method
+    def _close_preferences(self) -> None:
+        if self.prefs_window is not None:
+            self.prefs_window.close()
+        self.window.makeKeyAndOrderFront_(None)
 
     def showPreferences_(self, sender) -> None:
         if self.prefs_window is None:
@@ -599,7 +614,7 @@ class PreferencesWindow(NSObject):
         self.calibrate_button = NSButton.alloc().initWithFrame_(
             NSMakeRect(330, 202, 126, 28)
         )
-        self.calibrate_button.setTitle_("Calibrate…")
+        self.calibrate_button.setTitle_("Calibrate…")  # … because it asks first
         self.calibrate_button.setBezelStyle_(NSBezelStyleRounded)
         self.calibrate_button.setTarget_(owner)
         self.calibrate_button.setAction_("calibrate:")
@@ -649,6 +664,10 @@ class PreferencesWindow(NSObject):
     def show(self) -> None:
         self._load()
         self.window.makeKeyAndOrderFront_(None)
+
+    @objc.python_method
+    def close(self) -> None:
+        self.window.orderOut_(None)
 
     @objc.python_method
     def _load(self) -> None:

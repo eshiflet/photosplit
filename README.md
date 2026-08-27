@@ -59,8 +59,20 @@ last calibration, and how far in from the edge the bed is too dark to lay a
 print — and it saves `dust-map.json` and `dust-map.png` to
 `~/Library/Application Support/Photosplit`.
 
+Pressing **Run Calibration** closes Preferences and returns you to the main
+window, where the log shows the scan going and the verdict when it lands.
+
 Calibration always scans at 600 dpi whatever the Resolution setting says, so
-one calibration can be compared against the next.
+one calibration can be compared against the next. The last five runs are kept,
+newest first, so a glass that is slowly getting worse shows up as a trend
+rather than a single number:
+
+```
+Glass calibrated: 52 speck(s), 0.0015% of the bed, largest 0.72 mm.
+  cleaner than last time (98 speck(s))
+  last 4 runs, newest first: 52, 98, 51, 71
+  Keep prints 0.35 in clear of the left edge: the bed is dark there and photos in it merge.
+```
 
 Compressed air is a poor way to clean a flatbed: it lifts dust out of the
 housing and onto the glass. A microfibre cloth measurably works. The
