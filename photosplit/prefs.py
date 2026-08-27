@@ -176,8 +176,10 @@ class Prefs:
 
     # A dust map describes the glass as it was when it was measured. Clean the
     # glass and it is a list of places that no longer have anything in them,
-    # and healing those is retouching the photograph for no reason.
-    CALIBRATION_STALE_DAYS = 30
+    # and healing those is retouching the photograph for no reason. A week:
+    # long enough to cover a run of scanning, short enough that a map is
+    # unlikely to have outlived the state of the glass it describes.
+    CALIBRATION_STALE_DAYS = 7
 
     def glass_dust(self) -> dict | None:
         """The saved calibration, if there is one and it is recent enough."""

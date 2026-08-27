@@ -169,7 +169,7 @@ class GlassDustTest(unittest.TestCase):
 
         folder = Path(tempfile.mkdtemp(prefix="photosplit-stale-"))
         self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
-        old = (datetime.now() - timedelta(days=400)).isoformat(timespec="seconds")
+        old = (datetime.now() - timedelta(days=10)).isoformat(timespec="seconds")
         (folder / CALIBRATION_JSON).write_text(json.dumps(self.record([(30, 1.0, 1.0)], measured=old)))
 
         prefs = Prefs("com.photosplit.tests.stale")
@@ -178,7 +178,13 @@ class GlassDustTest(unittest.TestCase):
         real = blank_module.calibration_folder
         blank_module.calibration_folder = lambda: folder
         try:
-            self.assertIsNone(prefs.glass_dust(), "used a map from over a year ago")
+            self.assertIsNone(prefs.glass_dust(), "used a map older than the limit")
+
+            fresh = (datetime.now() - timedelta(days=2)).isoformat(timespec="seconds")
+            (folder / CALIBRATION_JSON).write_text(
+                json.dumps(self.record([(30, 1.0, 1.0)], measured=fresh))
+            )
+            self.assertIsNotNone(prefs.glass_dust(), "refused a map from this week")
         finally:
             blank_module.calibration_folder = real
 
