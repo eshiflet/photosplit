@@ -109,7 +109,17 @@ class WindowTest(AppTestCase):
         self.assertEqual(self.delegate.window.title(), "Photosplit")
         button = self.delegate.scan_button
         self.assertIsInstance(button, NSButton)
-        self.assertEqual(button.title(), "Scan")
+        self.assertEqual(button.title(), "Run Scan")
+
+        # The rounded bezel silently caps its cell at 32 pt, so a 60 pt frame
+        # drew a thin capsule adrift in it with the title crammed against the
+        # edge. Whatever the style, the button has to fill its own frame and
+        # leave room around the words.
+        size = button.frame().size
+        self.assertGreaterEqual(size.height, button.cell().cellSize().height)
+        title = button.attributedTitle().size()
+        self.assertGreater(size.width, title.width + 16)
+        self.assertGreater(size.height, title.height + 8)
         self.assertEqual(button.action(), "scan:")
         self.assertEqual(button.keyEquivalent(), "\r")
 
@@ -171,6 +181,21 @@ class WindowTest(AppTestCase):
                 0.4,
                 f"logged text is unreadable in {appearance}",
             )
+
+    def test_calibrate_button_exists_and_is_wired(self) -> None:
+        window = PreferencesWindow.alloc().initWithPrefs_owner_(self.delegate.prefs, self.delegate)
+        button = window.calibrate_button
+        self.assertEqual(button.title(), "Calibrate…")
+        self.assertEqual(button.action(), "calibrate:")
+        self.assertIs(button.target(), self.delegate)
+        self.assertTrue(self.delegate.respondsToSelector_("calibrate:"))
+        self.assertTrue(button.toolTip())
+
+    def test_calibrating_without_a_scanner_does_nothing(self) -> None:
+        # No scanner is attached in the tests; this must not raise or prompt.
+        self.assertFalse(self.delegate.devices)
+        self.delegate.calibrate_(None)
+        self.assertFalse(self.delegate.busy)
 
     def test_log_appends_lines(self) -> None:
         self.delegate._log("first")

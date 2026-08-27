@@ -17,10 +17,12 @@ from pathlib import Path
 import objc
 from AppKit import (
     NSAlert,
+    NSAlertFirstButtonReturn,
     NSApp,
     NSApplication,
     NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered,
+    NSBezelStyleRegularSquare,
     NSBezelStyleRounded,
     NSButton,
     NSColor,
@@ -47,9 +49,17 @@ from AppKit import (
 from Foundation import NSAttributedString, NSObject, NSOperationQueue
 
 from . import __version__
+from . import blank as blank_module
 from .prefs import FORMAT_LABELS, FORMATS, QUALITIES, QUALITY_LABELS, RESOLUTIONS, Prefs
 from .scanner import ScannerHub, ScanSession, ScanSettings
 from .split import SCAN_SUFFIXES, split_scan
+
+SCAN_TITLE = "Run Scan"
+SCANNING_TITLE = "Scanning…"
+# Calibration is always taken at one resolution, whatever the user scans at:
+# a speck count is only meaningful against the last one, and changing the
+# sampling underneath it would make every comparison a lie.
+CALIBRATION_DPI = 600
 
 WINDOW_STYLE = (
     NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
@@ -148,8 +158,12 @@ class AppDelegate(NSObject):
         view.addSubview_(refresh)
 
         self.scan_button = NSButton.alloc().initWithFrame_(NSMakeRect(24, 344, 472, 60))
-        self.scan_button.setTitle_("Scan")
-        self.scan_button.setBezelStyle_(NSBezelStyleRounded)
+        self.scan_button.setTitle_(SCAN_TITLE)
+        # A rounded bezel will not grow: its cell is 32 pt tall whatever the
+        # frame says, so this button drew a thin capsule floating inside 60 pt
+        # of nothing while the 22 pt title crowded the edge of it. The square
+        # bezel is the one that takes an arbitrary height.
+        self.scan_button.setBezelStyle_(NSBezelStyleRegularSquare)
         self.scan_button.setFont_(NSFont.systemFontOfSize_(22))
         self.scan_button.setKeyEquivalent_("\r")
         self.scan_button.setTarget_(self)
@@ -291,6 +305,62 @@ class AppDelegate(NSObject):
         )
         self.session.start()
 
+    # -- glass calibration -------------------------------------------------
+    def calibrate_(self, sender) -> None:
+        """Scan the empty bed and record what is on it."""
+        if self.busy or not self.devices:
+            return
+        if not self._confirm(
+            "Calibrate the glass",
+            "Take everything off the glass and close the lid, then continue. "
+            "Photosplit will scan the empty bed and record what it finds.",
+        ):
+            return
+        device = self.devices[max(0, self.device_popup.indexOfSelectedItem())]
+        settings = ScanSettings(
+            resolution=CALIBRATION_DPI,
+            colour=True,
+            downloads_dir=Path(tempfile.mkdtemp(prefix="photosplit-calibration-")),
+            document_name="blank",
+        )
+        self._set_busy(True, "Scanning the empty bed…")
+        self._log("--- calibrating the glass ---")
+        self.session = ScanSession.alloc().initWithDevice_settings_status_done_(
+            device,
+            settings,
+            lambda text: on_main(self._status, text),
+            lambda path, error: on_main(self._calibration_finished, path, error),
+        )
+        self.session.start()
+
+    @objc.python_method
+    def _calibration_finished(self, path: Path | None, error: str | None) -> None:
+        if error or path is None:
+            self._set_busy(False, "")
+            self._log(f"Calibration failed: {error}")
+            self._alert("The calibration did not finish", error or "No file was produced.")
+            return
+        try:
+            folder = blank_module.calibration_folder()
+            previous = blank_module.load_calibration(folder)
+            measured, specks = blank_module.measure(
+                path, self.session.actual_resolution()
+            )
+            blank_module.save_calibration(folder, measured, specks, path)
+        except Exception:
+            self._set_busy(False, "")
+            self._log(traceback.format_exc().strip())
+            self._alert("The calibration did not finish", "The empty bed could not be measured.")
+            return
+        finally:
+            path.unlink(missing_ok=True)
+            _remove_if_empty(path.parent)
+
+        for line in blank_module.verdict(measured, previous):
+            self._log(line)
+        self._log(f"  dust map saved to {folder}")
+        self._set_busy(False, "Calibrated")
+
     @objc.python_method
     def _scan_destination(self) -> Path:
         """Where the raw full-bed scan lands before it is split."""
@@ -374,7 +444,7 @@ class AppDelegate(NSObject):
     def _set_busy(self, busy: bool, message: str) -> None:
         self.busy = busy
         self.scan_button.setEnabled_(not busy and bool(self.devices))
-        self.scan_button.setTitle_("Scanning…" if busy else "Scan")
+        self.scan_button.setTitle_(SCANNING_TITLE if busy else SCAN_TITLE)
         self.progress.setHidden_(not busy)
         if busy:
             self.progress.startAnimation_(None)
@@ -430,6 +500,16 @@ class AppDelegate(NSObject):
         alert.setMessageText_(title)
         alert.setInformativeText_(message)
         alert.runModal()
+
+    @objc.python_method
+    def _confirm(self, title: str, message: str) -> bool:
+        """Ask before something that needs the glass in a particular state."""
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(title)
+        alert.setInformativeText_(message)
+        alert.addButtonWithTitle_("Continue")
+        alert.addButtonWithTitle_("Cancel")
+        return int(alert.runModal()) == NSAlertFirstButtonReturn
 
     def reveal_(self, sender) -> None:
         folder = self.prefs.output_folder
@@ -515,6 +595,18 @@ class PreferencesWindow(NSObject):
             "Scan in colour", NSMakeRect(24, 208, 200, 20), self, "changed:"
         )
         view.addSubview_(self.colour_box)
+
+        self.calibrate_button = NSButton.alloc().initWithFrame_(
+            NSMakeRect(330, 202, 126, 28)
+        )
+        self.calibrate_button.setTitle_("Calibrate…")
+        self.calibrate_button.setBezelStyle_(NSBezelStyleRounded)
+        self.calibrate_button.setTarget_(owner)
+        self.calibrate_button.setAction_("calibrate:")
+        self.calibrate_button.setToolTip_(
+            "Scan the empty bed and record the dust on it. Run this after cleaning the glass."
+        )
+        view.addSubview_(self.calibrate_button)
 
         view.addSubview_(label("Cropping", NSMakeRect(24, 172, 200, 18), bold=True))
         view.addSubview_(label("Ignore anything smaller than", NSMakeRect(24, 144, 190, 18)))
