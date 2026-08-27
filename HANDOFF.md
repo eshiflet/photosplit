@@ -24,6 +24,9 @@ over the network):
   bundle and fails if it cannot start there.
 - Baselines for scanner comparison are in `quality/`, with `quality/README.md`
   explaining which figures may be compared and which may not.
+- Three scanners measured: HP M478f, Epson V500, Epson Perfection 2400. The
+  V500 is the one to use. Edge rise turned out not to measure sharpness;
+  `quality/README.md` explains why before someone reads it that way again.
 
 ## What is next
 
@@ -55,6 +58,14 @@ What is already known about the HP:
   rather than the lens. This produced a wrong conclusion once already.
 - **Tonal figures only compare across scans holding the same prints.** Shadow,
   highlight, clipping and saturation describe the photographs, not the scanner.
+- **A bed that darkens towards an edge welds prints together.** Every scanner
+  vignettes: the V500 is dark until 0.33 in from its left edge, the 2400 until
+  0.57 in. That margin reads as "not background" down the whole length of the
+  bed, so any print sitting in it is bridged to every other one and the whole
+  column comes out as a single blob. No amount of space *between* the prints
+  helps, which makes it look like a spacing problem when it is not. Measure a
+  new scanner with `tools/scan_blank.py` and keep prints clear of what it
+  reports. This cost three scans to find.
 - **The scannable area is smaller than the glass** — A4 on the HP, even though
   the plate extends past the markers. Photosplit flags photos that reach the
   boundary; heed it. Check any new scanner with `tools/scanner_info.py`.
