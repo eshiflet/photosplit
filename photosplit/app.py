@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import time
 import threading
 import traceback
 from datetime import datetime
@@ -46,7 +47,7 @@ from AppKit import (
     NSWindowStyleMaskTitled,
     NSWorkspace,
 )
-from Foundation import NSAttributedString, NSObject, NSOperationQueue
+from Foundation import NSAttributedString, NSObject, NSOperationQueue, NSTimer
 
 from . import __version__
 from . import blank as blank_module
@@ -73,6 +74,12 @@ SCANNING_TITLE = "Scanning…"
 # sampling underneath it would make every comparison a lie.
 CALIBRATION_DPI = 600
 CALIBRATE_TITLE = "Run Calibration"
+# A scan that has not finished by now is not slow, it is stuck. Measured: a
+# 600 dpi film scan is 9 megapixels and takes under a minute, so the budget is
+# generous several times over before anything is called off.
+STALL_ADVICE_AFTER = 90.0
+STALL_BUDGET_BASE = 120.0
+STALL_SECONDS_PER_MPX = 15.0
 
 WINDOW_STYLE = (
     NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
@@ -121,6 +128,9 @@ class AppDelegate(NSObject):
         self._build_menu()
         self._build_window()
         self.prefs_window = None
+        self.stall_timer = None
+        self._scan_started = 0.0
+        self._stall_advised = False
         self._start_browsing()
         self._log(f"Photosplit {__version__} — looking for a scanner…")
         self._log(f"Saving to {self.prefs.output_folder}")
@@ -297,6 +307,59 @@ class AppDelegate(NSObject):
         if 0 <= index < len(self.devices):
             self.prefs["scannerName"] = self.devices[index].name()
 
+    # -- noticing a scan that is not happening ------------------------------
+    @objc.python_method
+    def _watch_for_stall(self) -> None:
+        self._scan_started = time.monotonic()
+        self._stall_advised = False
+        self.stall_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            5.0, self, "checkProgress:", None, True
+        )
+
+    @objc.python_method
+    def _stop_watching(self) -> None:
+        if getattr(self, "stall_timer", None) is not None:
+            self.stall_timer.invalidate()
+            self.stall_timer = None
+
+    def checkProgress_(self, timer) -> None:
+        if not self.busy or self.session is None:
+            return self._stop_watching()
+        waited = time.monotonic() - self._scan_started
+
+        if waited > STALL_ADVICE_AFTER and not self._stall_advised:
+            self._stall_advised = True
+            for line in self._stall_advice():
+                self._log(line)
+
+        budget = STALL_BUDGET_BASE + STALL_SECONDS_PER_MPX * max(
+            self.session.expected_megapixels(), 1.0
+        )
+        if waited > budget:
+            self._stop_watching()
+            # Close the session on the way out. Walking away from it is what
+            # leaves the scanner blinking and refusing the next scan.
+            self.session.give_up(
+                f"No image after {waited / 60:.0f} minutes. The scanner never started."
+            )
+
+    @objc.python_method
+    def _stall_advice(self) -> list[str]:
+        """What to try, for the scanner and mode this actually is."""
+        lines = ["  Still waiting. The scanner has not sent anything yet."]
+        if self.prefs.unit != FLATBED:
+            lines.append(
+                "  On an Epson, film scanning needs the white document mat taken"
+                " out of the lid — it covers the lamp that shines through the film."
+            )
+            lines.append("  Take the mat out, then switch the scanner off and on again.")
+        else:
+            lines.append(
+                "  Check the lid is closed and the scanner's light is steady rather"
+                " than blinking. If it blinks, switch it off and on again."
+            )
+        return lines
+
     def modeChanged_(self, sender) -> None:
         """Remember what is being scanned, and say so on the button."""
         index = self.mode_popup.indexOfSelectedItem()
@@ -338,6 +401,7 @@ class AppDelegate(NSObject):
             lambda path, error: on_main(self._scan_finished, path, error),
         )
         self.session.start()
+        self._watch_for_stall()
 
     # -- glass calibration -------------------------------------------------
     def calibrate_(self, sender) -> None:
@@ -371,9 +435,11 @@ class AppDelegate(NSObject):
             lambda path, error: on_main(self._calibration_finished, path, error),
         )
         self.session.start()
+        self._watch_for_stall()
 
     @objc.python_method
     def _calibration_finished(self, path: Path | None, error: str | None) -> None:
+        self._stop_watching()
         if error or path is None:
             self._set_busy(False, "")
             self._log(f"Calibration failed: {error}")
@@ -409,6 +475,7 @@ class AppDelegate(NSObject):
 
     @objc.python_method
     def _scan_finished(self, path: Path | None, error: str | None) -> None:
+        self._stop_watching()
         if error or path is None:
             self._set_busy(False, "")
             self._log(f"Scan failed: {error}")

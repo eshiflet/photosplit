@@ -96,7 +96,23 @@ class ScanSession(NSObject):
         self._result: Path | None = None
         self._finished = False
         self._actual_resolution = settings.resolution
+        self._expected_mpx = 0.0
         return self
+
+    @objc.python_method
+    def give_up(self, reason: str) -> None:
+        """Abandon a scan, closing the session behind it.
+
+        A client that simply stops listening leaves the scanner mid-scan with
+        its session open, and it stays that way — blinking an error light and
+        refusing the next scan — until someone power-cycles it.
+        """
+        self._fail(reason)
+
+    @objc.python_method
+    def expected_megapixels(self) -> float:
+        """How big this scan should be, for judging how long it may take."""
+        return self._expected_mpx
 
     @objc.python_method
     def actual_resolution(self) -> int:
@@ -185,6 +201,8 @@ class ScanSession(NSObject):
         # what "the whole window" means depends on the unit that was selected.
         size = unit.physicalSize()
         unit.setScanArea_(NSMakeRect(0, 0, size.width, size.height))
+
+        self._expected_mpx = size.width * size.height * wanted * wanted / 1e6
 
         settings.downloads_dir.mkdir(parents=True, exist_ok=True)
         device.setDownloadsDirectory_(

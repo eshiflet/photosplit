@@ -34,7 +34,7 @@ from photosplit.prefs import (
     QUALITY_LABELS,
     RESOLUTIONS,
 )
-from photosplit.scanner import run_loop_until
+from photosplit.scanner import ScanSession, ScanSettings, run_loop_until
 from tests.make_scan import SEPARATED, make
 
 from photosplit import prefs as prefs_module
@@ -187,6 +187,49 @@ class WindowTest(AppTestCase):
                 0.4,
                 f"logged text is unreadable in {appearance}",
             )
+
+    def test_a_stalled_film_scan_says_to_check_the_mat(self) -> None:
+        # The failure that cost 27 minutes: the transparency lamp is in the lid,
+        # under the white document mat, and with the mat left in the driver sits
+        # there forever without ever raising an error.
+        self.delegate.prefs.mode = prefs_module.NEGATIVE
+        advice = " ".join(self.delegate._stall_advice()).lower()
+        self.assertIn("mat", advice)
+        self.assertIn("off and on", advice)
+
+    def test_a_stalled_print_scan_does_not_mention_the_mat(self) -> None:
+        # The mat belongs in the lid for prints; saying otherwise would be wrong.
+        self.delegate.prefs.mode = prefs_module.PRINT
+        advice = " ".join(self.delegate._stall_advice()).lower()
+        self.assertNotIn("mat", advice)
+        self.assertIn("lid is closed", advice)
+
+    def test_giving_up_closes_the_session(self) -> None:
+        # Walking away from a session rather than closing it is what leaves the
+        # scanner blinking and refusing the next scan until it is power-cycled.
+        closed = []
+
+        class FakeDevice:
+            def name(self):
+                return "fake"
+
+            def setDelegate_(self, _):
+                pass
+
+            def requestOpenSession(self):
+                pass
+
+            def requestCloseSession(self):
+                closed.append(True)
+
+        done = []
+        session = ScanSession.alloc().initWithDevice_settings_status_done_(
+            FakeDevice(), ScanSettings(), lambda _t: None,
+            lambda path, error: done.append(error),
+        )
+        session.give_up("stopped")
+        self.assertTrue(closed, "gave up without closing the session")
+        self.assertEqual(done, ["stopped"])
 
     def test_calibrate_button_exists_and_is_wired(self) -> None:
         window = PreferencesWindow.alloc().initWithPrefs_owner_(self.delegate.prefs, self.delegate)
