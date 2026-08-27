@@ -53,7 +53,7 @@ Nothing is blocked.
   goes stale the moment the glass is cleaned, so anything acting on it should
   check the date it carries.
 - **More post-processing.** Contrast and colour work. The page exists for it,
-  and the home-processed roll is the case that needs it.
+  and the strip whose colour came out weakest is the case that needs it.
 
 ## Traps worth knowing
 
