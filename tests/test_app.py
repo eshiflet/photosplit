@@ -479,7 +479,7 @@ class PreferencesTest(AppTestCase):
         self.assertEqual(int(prefs.get("resolution", prefs_module.FILM)), 3200)
         self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 300)
 
-    def test_film_goes_through_the_positive_unit(self) -> None:
+    def test_film_and_slides_go_through_the_positive_unit(self) -> None:
         # Not the negative unit, which inverts as it scans and flattens the
         # channels doing it: measured at a spread of 4.8 between them against
         # 41.4 for the same frame taken positive. Inverting is downstream work
@@ -487,10 +487,23 @@ class PreferencesTest(AppTestCase):
         from photosplit.scanner import FLATBED, POSITIVE
 
         prefs = self.delegate.prefs
-        prefs.mode = prefs_module.FILM
-        self.assertEqual(prefs.unit, POSITIVE)
+        for mode in (prefs_module.FILM, prefs_module.SLIDE):
+            with self.subTest(mode=mode):
+                prefs.mode = mode
+                self.assertEqual(prefs.unit, POSITIVE)
         prefs.mode = prefs_module.PRINT
         self.assertEqual(prefs.unit, FLATBED)
+
+    def test_film_and_slides_stay_separate_modes(self) -> None:
+        # They share a unit and not a holder: a strip is one ribbon of frames
+        # separated by a rebate line, slides are individual mounts sitting
+        # apart. The same scan, with different things to find in it, and each
+        # keeps its own settings.
+        prefs = self.delegate.prefs
+        self.assertIn(prefs_module.SLIDE, prefs_module.MODES)
+        self.assertIn(prefs_module.FILM, prefs_module.MODES)
+        prefs.set("resolution", 3200, prefs_module.FILM)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.SLIDE)), 2400)
 
     def test_every_mode_captures_deep_and_saves_lossless(self) -> None:
         prefs = self.delegate.prefs
@@ -503,7 +516,7 @@ class PreferencesTest(AppTestCase):
         # A 35 mm frame is 0.94 in on its short side, so the print default of
         # 1.0 would throw every frame away as too small.
         prefs = self.delegate.prefs
-        for mode in (prefs_module.FILM,):
+        for mode in (prefs_module.FILM, prefs_module.SLIDE):
             with self.subTest(mode=mode):
                 self.assertLess(float(prefs.get("minSize", mode)), 0.94)
         self.assertGreaterEqual(float(prefs.get("minSize", prefs_module.PRINT)), 1.0)
