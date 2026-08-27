@@ -52,6 +52,20 @@ Everything adjustable is in **Preferences** (⌘,):
 | Save a marked-up preview of each scan | off — turn on to see what it detected |
 | Open the folder when a scan finishes | on |
 
+**Calibrate…** in Preferences scans the empty bed and records what is on it.
+Run it when a scanner is new to you and after every time you clean the glass.
+It reports how many specks it found, whether that is better or worse than the
+last calibration, and how far in from the edge the bed is too dark to lay a
+print — and it saves `dust-map.json` and `dust-map.png` to
+`~/Library/Application Support/Photosplit`.
+
+Calibration always scans at 600 dpi whatever the Resolution setting says, so
+one calibration can be compared against the next.
+
+Compressed air is a poor way to clean a flatbed: it lifts dust out of the
+housing and onto the glass. A microfibre cloth measurably works. The
+calibration will tell you which you did.
+
 Files are named by the moment they were scanned, so nothing ever overwrites
 anything: `2026-08-26-143205-01.jpg`, `-02`, and so on.
 
