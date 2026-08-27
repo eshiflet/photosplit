@@ -307,6 +307,34 @@ class WindowTest(AppTestCase):
         self.assertNotIn("%", silent)
         self.assertIn("still going", silent)
 
+    def test_a_scan_that_has_reached_100_percent_is_not_accused_of_stalling(self) -> None:
+        # Progress reaches 100 before the file lands: ten seconds on a 227 MB
+        # scan, longer on a bigger one. Nothing moves during that tail.
+        import time as _time
+
+        class DoneScanning:
+            def progress(self):
+                return -1.0
+
+            def expected_megapixels(self):
+                return 36.0
+
+        self.delegate.session = DoneScanning()
+        self.delegate.busy = True
+        self.delegate._last_progress = 100.0
+        self.delegate._stall_advised = False
+        self.delegate._progress_logged = _time.monotonic()
+        self.delegate._scan_started = _time.monotonic() - 600
+        self.delegate._scan_begun = self.delegate._scan_started
+        try:
+            self.delegate.checkProgress_(None)
+            self.assertFalse(
+                self.delegate._stall_advised, "accused a scanner that had finished scanning"
+            )
+        finally:
+            self.delegate.session = None
+            self.delegate.busy = False
+
     def test_the_footer_follows_the_mode(self) -> None:
         # It read the flat preference keys, which nothing scans with any more,
         # so choosing Film left it saying 600 dpi while the scan ran at 2400.

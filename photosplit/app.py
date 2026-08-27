@@ -358,7 +358,12 @@ class AppDelegate(NSObject):
             self._log(self._progress_line(moved))
         waited = now - self._scan_started
 
-        if waited > STALL_ADVICE_AFTER and not self._stall_advised:
+        # Progress reaches 100 before the file arrives — measured at ten
+        # seconds on a 227 MB scan, and a bigger one takes longer. Nothing
+        # moves during that tail, so the clock would eventually accuse a
+        # scanner that has already done everything it was asked.
+        finished_scanning = self._last_progress >= 100.0
+        if waited > STALL_ADVICE_AFTER and not self._stall_advised and not finished_scanning:
             self._stall_advised = True
             for line in self._stall_advice():
                 self._log(line)
