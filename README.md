@@ -14,27 +14,32 @@ edge, and saves them into the folder you picked.
 Any Mac, Apple Silicon or Intel, macOS 11 or newer.
 
 ```bash
-git clone <this repo> ~/Documents/GitHub/photosplit
-cd ~/Documents/GitHub/photosplit && ./install.sh
+git clone <this repo> photosplit
+cd photosplit && ./install.sh
 ```
 
 That builds a self-contained virtualenv, `Photosplit.app`, and a `photosplit`
 command in `~/.local/bin`. Drag `Photosplit.app` to your Dock. Re-run
 `./install.sh` any time; it is idempotent.
 
-The path above is only a convention — clone it wherever you keep repositories.
-But **if you move the repo afterwards, re-run `./install.sh`**. The virtualenv,
-the `~/.local/bin` symlink and the app bundle all bake in absolute paths, and
-they break silently until the script rewrites them.
+Clone it wherever you keep repositories. But **if you move it afterwards,
+re-run `./install.sh`**. The virtualenv, the `~/.local/bin` symlink and the app
+bundle all bake in absolute paths, and they break silently until the script
+rewrites them.
 
 To set up a second Mac, clone the repo there and run `./install.sh` again. The
 virtualenv is built per machine, so do not copy `.venv` between them.
 
 ## Use
 
-Open Photosplit, put the photos on the glass, close the lid, press **Scan**.
-The window shows what it found and where it went; the folder opens when it is
-done. Then load the next batch and press Scan again.
+Open Photosplit, choose what you are scanning — **Prints**, **Film** or
+**Slides** — put them on the glass, close the lid, and press the button, which
+names what it is about to do: **Run Print Scan**, **Run Film Scan**, **Run
+Slide Scan**. The window shows what it found and where it went; the folder
+opens when it is done. Then load the next batch and press it again.
+
+Each mode keeps its own settings, because what is right for a print is wrong
+for a 35 mm frame.
 
 Everything adjustable is in **Preferences** (⌘,):
 
@@ -44,10 +49,11 @@ Everything adjustable is in **Preferences** (⌘,):
 | Resolution | Per mode. 600 dpi for prints; 2400 for film, where the frame is 35 mm wide and needs it |
 | Scanning | Prints, Film, or Slides. Film and slides both go through the positive transparency unit — the one that hands back what is actually on the film — but they are separate modes because they use different holders: a strip is one ribbon of frames, slides are individual mounts sitting apart. Inverting a negative is done afterwards, on the scan, so it can be redone without scanning again |
 | Save as | PNG (lossless) by default; JPEG or TIFF if you prefer |
-| Depth | 16-bit. Pillow cannot write 16-bit colour at all, so these are written through OpenCV, with the resolution added to the PNG afterwards |
+| Depth | 16-bit, which matters most for negatives: inverting one stretches a narrow slice of the range across the whole output, and 8-bit does not have the levels to survive it |
 | JPEG quality | 95. Measured at ~49 dB PSNR against the uncompressed crop, so it is visually transparent; 100 costs about 2.4x the file size for ~3 dB. For analysis work choose PNG or TIFF instead and skip the question |
 | Scan in colour | on |
-| Ignore anything smaller than | 1 inch — raises this to reject dust |
+| Ignore anything smaller than | 1 inch for prints, 0.5 for film — a 35 mm frame is 0.94 in on its short side, so the print threshold would discard every one |
+| Negatives — turn them into positives | on for film, off for prints and slides |
 | Straighten crooked photos | on |
 | Trim leftover scanner background | on |
 | Keep the full scan as well | off |
@@ -81,7 +87,7 @@ housing and onto the glass. A microfibre cloth measurably works. The
 calibration will tell you which you did.
 
 Files are named by the moment they were scanned, so nothing ever overwrites
-anything: `2026-08-26-143205-01.jpg`, `-02`, and so on.
+anything: `2026-08-26-143205-01.png`, `-02`, and so on.
 
 You can also drop scans you already have onto the app icon, and they are split
 with the same settings. Your originals are left alone.
@@ -137,9 +143,19 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | Everything has a colour tint | — | `--neutralise` |
 | A strip of film came out as one image | Scanning: Film | `--film` |
 
-## Film
+## Film and slides
 
-A strip is not a set of separate photographs. The frames touch, parted only by
+Both go through the scanner's transparency unit, and both need its film holder;
+most flatbeds also need the white document mat taken out of the lid, because it
+covers the lamp that shines through the film. **If a film scan never starts,
+that mat is the first thing to check** — the scanner usually reports no error,
+it simply waits. Photosplit says so in its log if nothing arrives.
+
+Slides need nothing special beyond that: they are separate mounts with holder
+between them, which is the same problem as prints on a lid, and the ordinary
+detector handles it.
+
+A strip is different. A strip is not a set of separate photographs. The frames touch, parted only by
 a rebate line a couple of millimetres wide, so the detector that finds prints
 on a lid sees one long ribbon. `--film`, and the Film mode in the app, uses a
 different one.
@@ -176,9 +192,8 @@ the raw one, so a better inversion later costs a re-run rather than a re-scan.
 `--neutralise` colour-balances a scan against its own lid. The lid is white, so
 whatever tint it comes back with is the scanner's, or the mat's, and the same
 tint lies over the prints; dividing it out takes it off the photographs too.
-On the Epson V500 this takes the lid from R 237.4, G 241.8, B 244.4 — four
-levels of blue over everything — down to neutral, leaving sharpness, shadow
-detail and highlights where they were.
+On a scanner whose lid reads a few levels blue, this takes it to neutral and
+leaves sharpness, shadow detail and highlights where they were.
 
 It fixes neutrality, not colour accuracy: it makes a known white read as white,
 but cannot tell you whether a red is the right red. That needs a target with
@@ -209,7 +224,10 @@ It reports colour neutrality, noise, edge sharpness, and how much tonal range
 survives — all measured off the prints and the lid, so the numbers do not
 depend on what the photographs contain. It cannot measure absolute colour
 accuracy; that needs a reference target (IT8 or ColorChecker) on the glass.
-Baselines live in `quality/`.
+
+`quality/` holds measurements taken with these tools, and `quality/README.md`
+explains which figures may be compared between scanners and which may not —
+including one, edge rise, that looks like a measure of sharpness and is not.
 
 ## Layout
 
@@ -217,14 +235,18 @@ Baselines live in `quality/`.
 | --- | --- |
 | `photosplit/scanner.py` | Drives the scanner through ImageCaptureCore |
 | `photosplit/detect.py` | Separates photo from scanner lid, one rectangle per print |
+| `photosplit/film.py` | Splits a strip of film into frames at its rebate lines |
+| `photosplit/negative.py` | Turns a scanned negative into a positive |
+| `photosplit/blank.py` | Measures an empty bed: dirt, vignetting, colour cast |
 | `photosplit/extract.py` | Rotates, crops, trims, saves; draws the preview |
 | `photosplit/split.py` | The scan-to-files step, shared by the app and the CLI |
-| `photosplit/app.py` | The window, the Scan button, Preferences |
+| `photosplit/app.py` | The window, the scan button, Preferences, calibration |
 | `photosplit/prefs.py` | Settings, stored in NSUserDefaults |
 | `photosplit/cli.py` | The `photosplit` command |
 | `build_app.sh` | Assembles `Photosplit.app` |
 | `tools/scan_quality.py` | Measures a scan, for comparing scanners |
 | `tools/scanner_info.py` | Reports a scanner's reachable area and resolutions |
+| `tools/scan_blank.py` | Measures an empty bed from the command line |
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .
