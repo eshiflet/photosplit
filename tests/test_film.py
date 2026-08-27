@@ -90,6 +90,24 @@ class FilmStripTest(unittest.TestCase):
         frames, _ = find_frames(scan, DPI)
         self.assertEqual(len(frames), 5)
 
+    def test_a_grainy_film_still_splits(self) -> None:
+        # A rebate line is only flat relative to the film it is on. Six levels
+        # of absolute flatness fits fine colour film and fails TMAX 400 at 2400
+        # dpi, whose rebate measured 7.4 while its frames ran 15 to 28 — the
+        # whole strip came back as one frame.
+        path = self.dir / "grainy.png"
+        strip(path, frames=4)
+        image = cv2.imread(str(path))
+        rng = np.random.default_rng(21)
+        left, right = int(0.9 * DPI), int(1.9 * DPI)
+        band = image[:, left:right].astype(np.int16)
+        band += rng.normal(0, 9, band.shape).astype(np.int16)
+        image[:, left:right] = np.clip(band, 0, 255).astype(np.uint8)
+        cv2.imwrite(str(path), image)
+
+        frames, _ = find_frames(cv2.imread(str(path)), DPI)
+        self.assertEqual(len(frames), 4, "grain swallowed the gaps between frames")
+
     def test_the_holder_is_what_frames_are_trimmed_against(self) -> None:
         # Not a lid colour: a frame is cut out of an opaque black holder.
         scan = cv2.imread(str(strip(self.dir / "bg.png")))

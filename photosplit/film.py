@@ -27,6 +27,12 @@ HOLDER_LEVEL = 40  # below this is the opaque holder rather than film
 EMPTY_LEVEL = 220  # above this is a slot with no film in it
 BASE_FRACTION = 0.93  # how close to the base level still counts as rebate
 GAP_FLATNESS = 6.0  # a rebate line has no picture in it
+# ...but how flat that is depends on the film. Six levels holds for fine colour
+# film at 600 dpi and is far too strict for TMAX 400 at 2400, whose rebate
+# measured 7.4 and 8.4 while its own frames ran 15 to 28. What separates them is
+# not an absolute figure, it is that a gap is much flatter than the picture
+# around it, so the limit is taken from the strip in hand.
+GAP_FLATNESS_SHARE = 0.5
 MIN_GAP_IN = 0.015
 EDGE_INSET_IN = 0.06  # the very edge of the film is not picture
 
@@ -92,7 +98,7 @@ def measure_base(bgr: np.ndarray, dpi: float) -> np.ndarray | None:
     if not film.any():
         return None
     base_level = float(np.percentile(mean[film], 97))
-    rebate = film & (mean > base_level * BASE_FRACTION) & (spread < GAP_FLATNESS)
+    rebate = film & (mean > base_level * BASE_FRACTION) & (spread < _flatness(spread, film))
     if rebate.sum() < max(4, int(0.01 * dpi)):
         return None
     return strip[rebate].reshape(-1, 3).mean(axis=0)
@@ -117,7 +123,7 @@ def _frame_runs(mean: np.ndarray, spread: np.ndarray, dpi: float) -> list[tuple[
         return []
     base = float(np.percentile(mean[film], 97))
 
-    rebate = film & (mean > base * BASE_FRACTION) & (spread < GAP_FLATNESS)
+    rebate = film & (mean > base * BASE_FRACTION) & (spread < _flatness(spread, film))
     # A stretch of holder with no film in it separates frames every bit as
     # well as a rebate line, and a strip does not always end with one: the
     # film simply stops. Without this the last frame runs on into the slot.
@@ -146,6 +152,18 @@ def _frame_runs(mean: np.ndarray, spread: np.ndarray, dpi: float) -> list[tuple[
             continue  # a slot with no film in it
         runs.append((top, bottom))
     return runs
+
+
+def _flatness(spread: np.ndarray, film: np.ndarray) -> float:
+    """How flat a row must be to count as a gap rather than as picture.
+
+    Relative to this strip's own texture, with an absolute floor so a strip of
+    near-empty frames cannot tighten it into finding nothing at all.
+    """
+    texture = spread[film]
+    if texture.size == 0:
+        return GAP_FLATNESS
+    return max(GAP_FLATNESS, float(np.median(texture)) * GAP_FLATNESS_SHARE)
 
 
 def _runs(flags: np.ndarray) -> list[tuple[int, int]]:
