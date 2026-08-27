@@ -1,0 +1,23 @@
+[
+  {
+    "scan": "p2400-600f.tiff",
+    "dpi": 600.0,
+    "photos": 5,
+    "lid_rgb": [
+      239.6,
+      244.7,
+      244.0
+    ],
+    "lid_cast": 5.12,
+    "lid_noise": 3.703,
+    "edge_rise_um": 317.5,
+    "edge_rise_px": 7.5,
+    "edges_measured": 18,
+    "luma_p1": 26.0,
+    "luma_p99": 202.5,
+    "clipped_black_pct": 0.0,
+    "clipped_white_pct": 0.0,
+    "saturation": 72.4,
+    "shadow_noise": 3.6
+  }
+]
