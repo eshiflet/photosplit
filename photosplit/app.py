@@ -85,6 +85,7 @@ CALIBRATE_TITLE = "Run Calibration"
 # 600 dpi film scan is 9 megapixels and takes under a minute, so the budget is
 # generous several times over before anything is called off.
 STALL_ADVICE_AFTER = 90.0
+PROGRESS_EVERY = 10.0  # how often to say how it is going, in seconds
 STALL_BUDGET_BASE = 120.0
 STALL_SECONDS_PER_MPX = 15.0
 
@@ -137,6 +138,8 @@ class AppDelegate(NSObject):
         self.prefs_window = None
         self.stall_timer = None
         self._scan_started = 0.0
+        self._scan_begun = 0.0
+        self._progress_logged = 0.0
         self._stall_advised = False
         self._last_progress = -1.0
         self._start_browsing()
@@ -193,6 +196,10 @@ class AppDelegate(NSObject):
             NSMakeRect(90, 387, 200, 26), False
         )
         self.mode_popup.addItemsWithTitles_([MODE_LABELS[m] for m in MODES])
+        # Show the mode that is actually in force. Without this the menu opens
+        # on the first item while the button and the footer read the saved
+        # mode, and the window contradicts itself before anything is pressed.
+        self.mode_popup.selectItemAtIndex_(MODES.index(self.prefs.mode))
         self.mode_popup.setTarget_(self)
         self.mode_popup.setAction_("modeChanged:")
         view.addSubview_(self.mode_popup)
@@ -319,6 +326,8 @@ class AppDelegate(NSObject):
     @objc.python_method
     def _watch_for_stall(self) -> None:
         self._scan_started = time.monotonic()
+        self._scan_begun = self._scan_started
+        self._progress_logged = self._scan_started
         self._stall_advised = False
         self._last_progress = -1.0
         self.stall_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
@@ -338,12 +347,16 @@ class AppDelegate(NSObject):
         # Ask the scanner rather than the clock. A 2400 dpi film scan takes
         # four minutes of honest work, and warning at ninety seconds told
         # someone their scan had stalled while it was running perfectly.
+        now = time.monotonic()
         moved = self.session.progress()
         if moved >= 0 and moved != self._last_progress:
             self._last_progress = moved
-            self._scan_started = time.monotonic()
+            self._scan_started = now
             self._stall_advised = False
-        waited = time.monotonic() - self._scan_started
+        if moved >= 0 and now - self._progress_logged >= PROGRESS_EVERY:
+            self._progress_logged = now
+            self._log(self._progress_line(moved))
+        waited = now - self._scan_started
 
         if waited > STALL_ADVICE_AFTER and not self._stall_advised:
             self._stall_advised = True
@@ -360,6 +373,20 @@ class AppDelegate(NSObject):
             self.session.give_up(
                 f"No image after {waited / 60:.0f} minutes. The scanner never started."
             )
+
+    @objc.python_method
+    def _progress_line(self, percent: float) -> str:
+        """What the scanner says, in the terms it actually reports.
+
+        Some report a percentage and some only that they are still going, so
+        say whichever is true rather than inventing a number.
+        """
+        elapsed = time.monotonic() - self._scan_begun
+        minutes, seconds = divmod(int(elapsed), 60)
+        clock = f"{minutes}:{seconds:02d}" if minutes else f"{seconds}s"
+        if percent > 0:
+            return f"  scanning… {percent:.0f}% after {clock}"
+        return f"  scanning… still going after {clock}"
 
     @objc.python_method
     def _stall_advice(self) -> list[str]:

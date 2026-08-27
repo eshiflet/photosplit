@@ -97,10 +97,14 @@ Nothing is blocked.
 - **Edge rise does not measure sharpness.** Three scanners rank backwards
   against their own optics on it; `quality/README.md` explains why.
 - **Tonal figures only compare across scans of the same originals.**
-- **Colour on old film is approximate.** A home-processed roll and a
-  professionally processed one, inverted by identical code, come out visibly
-  different, and the difference is in the film. Never tune the inversion until
-  one particular strip looks right.
+- **Colour on old film is approximate.** Two colour negative strips, both
+  professionally processed, measured film bases of 0.630/0.739/1.000 and
+  0.564/0.679/1.000 and inverted by identical code to visibly different
+  colour. What causes that — stock, age, storage — was not established, and
+  guessing at it is exactly the mistake: the numbers differ, that is the fact,
+  and it is why the base is measured per strip rather than looked up. Never
+  tune the inversion until one particular strip looks right; that encodes one
+  roll's history into the tool.
 - **Nothing is a constant that can be measured instead.** The orange mask, the
   lid colour, the rebate flatness, the noise floor: every one of these differs
   between rolls, scanners and machines, and every time one was assumed it was

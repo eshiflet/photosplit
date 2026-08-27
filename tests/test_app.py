@@ -278,6 +278,35 @@ class WindowTest(AppTestCase):
         self.delegate.calibrate_(None)
         self.assertFalse(self.delegate.busy)
 
+    def test_the_window_agrees_with_itself_on_launch(self) -> None:
+        # The menu opened on Prints while the button said Run Film Scan and the
+        # footer said Film. Three places, one mode; they have to match before
+        # anything is pressed.
+        prefs = self.delegate.prefs
+        prefs.mode = prefs_module.FILM
+        fresh = build_delegate()
+        try:
+            self.assertEqual(
+                str(fresh.mode_popup.titleOfSelectedItem()),
+                prefs_module.MODE_LABELS[prefs_module.FILM],
+            )
+            self.assertEqual(fresh.scan_button.title(), "Run Film Scan")
+            self.assertIn("Film", str(fresh.settings_label.stringValue()))
+        finally:
+            prefs.mode = prefs_module.PRINT
+
+    def test_progress_is_reported_in_the_terms_the_scanner_uses(self) -> None:
+        import time as _time
+
+        self.delegate._scan_begun = _time.monotonic() - 65
+        with_percent = self.delegate._progress_line(42.0)
+        self.assertIn("42%", with_percent)
+        self.assertIn("1:05", with_percent)
+        # A scanner that reports no percentage must not have one invented.
+        silent = self.delegate._progress_line(0.0)
+        self.assertNotIn("%", silent)
+        self.assertIn("still going", silent)
+
     def test_the_footer_follows_the_mode(self) -> None:
         # It read the flat preference keys, which nothing scans with any more,
         # so choosing Film left it saying 600 dpi while the scan ran at 2400.
