@@ -151,6 +151,41 @@ def heal(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
+def known_specks(
+    shape: tuple[int, int], dpi: float, record: dict | None, origin=(0, 0)
+) -> np.ndarray:
+    """A mask of the dirt a calibration already found on the glass.
+
+    This is the one source with no guesswork in it. Dirt on the platen sits in
+    the same place on every scan, so a calibration knows exactly where it is
+    and nothing in the photograph can be mistaken for it. It only covers the
+    glass — dust on the film or on the print itself is not here — and it is
+    wrong the moment the glass is cleaned, so a stale record is worse than
+    none and the caller has to decide how old is too old.
+    """
+    height, width = shape[:2]
+    mask = np.zeros((height, width), np.uint8)
+    if not record:
+        return mask
+    seen = record.get("specks_seen") or []
+    calibrated = float(record.get("dpi") or 0) or dpi
+    scale = dpi / calibrated
+    left, top = origin
+
+    for speck in seen:
+        try:
+            x = float(speck["x_in"]) * dpi - left
+            y = float(speck["y_in"]) * dpi - top
+            area = float(speck.get("area_px", 4)) * scale * scale
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (0 <= x < width and 0 <= y < height):
+            continue
+        radius = max(1, int(round((area / 3.14159) ** 0.5)))
+        cv2.circle(mask, (int(x), int(y)), radius, 1, -1)
+    return mask
+
+
 def mark(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """The picture with every speck ringed, so it can be looked at first.
 

@@ -138,6 +138,7 @@ class AppDelegate(NSObject):
         self.stall_timer = None
         self._scan_started = 0.0
         self._stall_advised = False
+        self._last_progress = -1.0
         self._start_browsing()
         self._log(f"Photosplit {__version__} — looking for a scanner…")
         self._log(f"Saving to {self.prefs.output_folder}")
@@ -319,6 +320,7 @@ class AppDelegate(NSObject):
     def _watch_for_stall(self) -> None:
         self._scan_started = time.monotonic()
         self._stall_advised = False
+        self._last_progress = -1.0
         self.stall_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             5.0, self, "checkProgress:", None, True
         )
@@ -332,6 +334,15 @@ class AppDelegate(NSObject):
     def checkProgress_(self, timer) -> None:
         if not self.busy or self.session is None:
             return self._stop_watching()
+
+        # Ask the scanner rather than the clock. A 2400 dpi film scan takes
+        # four minutes of honest work, and warning at ninety seconds told
+        # someone their scan had stalled while it was running perfectly.
+        moved = self.session.progress()
+        if moved >= 0 and moved != self._last_progress:
+            self._last_progress = moved
+            self._scan_started = time.monotonic()
+            self._stall_advised = False
         waited = time.monotonic() - self._scan_started
 
         if waited > STALL_ADVICE_AFTER and not self._stall_advised:
@@ -353,7 +364,7 @@ class AppDelegate(NSObject):
     @objc.python_method
     def _stall_advice(self) -> list[str]:
         """What to try, for the scanner and mode this actually is."""
-        lines = ["  Still waiting. The scanner has not sent anything yet."]
+        lines = ["  Still waiting. The scanner has not reported any progress yet."]
         if self.prefs.unit != FLATBED:
             lines.append(
                 "  On an Epson, film scanning needs the white document mat taken"
@@ -809,11 +820,16 @@ class PreferencesWindow(NSObject):
             NSMakeRect(44, 266, 380, 20), self, "changed:",
         )
         after.addSubview_(self.dust_preview_box)
-        self.dust_note = label("", NSMakeRect(24, 244, 408, 18), secondary=True)
+        self.glass_box = checkbox(
+            "Also heal the dirt the last calibration found on the glass",
+            NSMakeRect(24, 240, 408, 20), self, "changed:",
+        )
+        after.addSubview_(self.glass_box)
+        self.dust_note = label("", NSMakeRect(24, 218, 408, 18), secondary=True)
         after.addSubview_(self.dust_note)
 
-        after.addSubview_(label("Metadata", NSMakeRect(24, 206, 200, 18), bold=True))
-        self.note_field = NSTextField.alloc().initWithFrame_(NSMakeRect(24, 176, 408, 24))
+        after.addSubview_(label("Metadata", NSMakeRect(24, 186, 200, 18), bold=True))
+        self.note_field = NSTextField.alloc().initWithFrame_(NSMakeRect(24, 156, 408, 24))
         self.note_field.setPlaceholderString_(
             "Film, exposure, what the picture is of — written into every file"
         )
@@ -821,9 +837,9 @@ class PreferencesWindow(NSObject):
         self.note_field.setAction_("changed:")
         after.addSubview_(self.note_field)
 
-        after.addSubview_(label("Finishing", NSMakeRect(24, 138, 200, 18), bold=True))
+        after.addSubview_(label("Finishing", NSMakeRect(24, 120, 200, 18), bold=True))
         self.reveal_box = checkbox(
-            "Open the folder when a scan finishes", NSMakeRect(24, 110, 340, 20), self, "changed:"
+            "Open the folder when a scan finishes", NSMakeRect(24, 92, 340, 20), self, "changed:"
         )
         after.addSubview_(self.reveal_box)
 
@@ -907,12 +923,17 @@ class PreferencesWindow(NSObject):
         self.dust_popup.setEnabled_(usable and bool(self.dust_box.state()))
         self.dust_preview_box.setState_(1 if prefs.get("dustPreview") else 0)
         self.dust_preview_box.setEnabled_(usable and bool(self.dust_box.state()))
+        # Independent of detection: this needs no resolution, only a map.
+        mapped = prefs.glass_dust() is not None
+        self.glass_box.setState_(1 if (prefs.get("glassDust") and mapped) else 0)
+        self.glass_box.setEnabled_(mapped)
         self.correction_heading.setStringValue_(f"Correction — {MODE_LABELS[prefs.mode]}")
         self.dust_note.setStringValue_(
             ""
             if usable
-            else f"Dust removal needs {DUST_MIN_DPI} dpi or better: below that a"
-            " speck cannot be told from film grain."
+            else f"Detecting dust needs {DUST_MIN_DPI} dpi or better: below that a"
+            " speck cannot be told from film grain. Healing known glass dirt"
+            " works at any resolution."
         )
         # Slide film in uncut strips is not a negative, and a print never is.
         self.invert_box.setEnabled_(prefs.mode != PRINT)
@@ -940,6 +961,7 @@ class PreferencesWindow(NSObject):
         if 0 <= index < len(DUST_STRENGTHS):
             prefs.set("dustStrength", DUST_STRENGTHS[index])
         prefs.set("dustPreview", bool(self.dust_preview_box.state()))
+        prefs.set("glassDust", bool(self.glass_box.state()))
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())

@@ -18,6 +18,7 @@ import ImageCaptureCore as ICC
 import objc
 from Foundation import NSURL, NSDate, NSMakeRect, NSObject, NSRunLoop
 
+SCANNING = ICC.ICScannerFunctionalUnitStateScanInProgress
 FLATBED = ICC.ICScannerFunctionalUnitTypeFlatbed
 POSITIVE = ICC.ICScannerFunctionalUnitTypePositiveTransparency
 NEGATIVE = ICC.ICScannerFunctionalUnitTypeNegativeTransparency
@@ -97,7 +98,25 @@ class ScanSession(NSObject):
         self._finished = False
         self._actual_resolution = settings.resolution
         self._expected_mpx = 0.0
+        self._unit = None
         return self
+
+    @objc.python_method
+    def progress(self) -> float:
+        """How far along the scanner says it is, or -1 when it will not say.
+
+        The functional unit carries this, so a long scan can be told from a
+        stalled one by asking rather than by guessing from a clock.
+        """
+        unit = self._unit
+        if unit is None:
+            return -1.0
+        try:
+            if not (unit.scanInProgress() or unit.state() == SCANNING):
+                return -1.0
+            return float(unit.scanProgressPercentDone())
+        except Exception:
+            return -1.0
 
     @objc.python_method
     def give_up(self, reason: str) -> None:
@@ -176,6 +195,7 @@ class ScanSession(NSObject):
             self._configure(device, unit)
         except Exception as problem:  # a scanner that refuses a setting
             return self._fail(f"Could not configure the scanner: {problem}")
+        self._unit = unit
         self._on_status(f"Scanning at {self._settings.resolution} dpi…")
         device.requestScan()
 

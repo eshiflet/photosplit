@@ -37,7 +37,7 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
     # about. 600 dpi is plenty for an opaque print.
     PRINT: {
         "resolution": 600, "bitDepth": 16, "format": "png", "minSize": 1.0,
-        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "note": "",
+        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
     },
     # Film is inverted afterwards, which stretches the shadows hard enough to
     # band 8-bit data. 2400 rather than the
@@ -47,12 +47,12 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
         "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
         # Film strips are usually negatives; slide film in uncut strips is not,
         # so this is a setting rather than a consequence of the mode.
-        "invert": True, "dust": False, "dustStrength": "normal", "dustPreview": False, "note": "",
+        "invert": True, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
     },
     # A mounted 35 mm slide shows about 1.35 x 0.90 in through its mount.
     SLIDE: {
         "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
-        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "note": "",
+        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
     },
 }
 
@@ -174,6 +174,29 @@ class Prefs:
     def set(self, key: str, value, mode: str | None = None) -> None:
         self[f"{mode or self.mode}.{key}"] = value
 
+    # A dust map describes the glass as it was when it was measured. Clean the
+    # glass and it is a list of places that no longer have anything in them,
+    # and healing those is retouching the photograph for no reason.
+    CALIBRATION_STALE_DAYS = 30
+
+    def glass_dust(self) -> dict | None:
+        """The saved calibration, if there is one and it is recent enough."""
+        from datetime import datetime
+
+        from .blank import calibration_folder, load_calibration
+
+        record = load_calibration(calibration_folder())
+        if not record:
+            return None
+        stamp = record.get("measured")
+        if not stamp:
+            return None
+        try:
+            age = (datetime.now() - datetime.fromisoformat(str(stamp))).days
+        except ValueError:
+            return None
+        return record if age <= self.CALIBRATION_STALE_DAYS else None
+
     def dust_available(self, mode: str | None = None) -> bool:
         """Whether this mode scans finely enough for dust removal to work.
 
@@ -208,5 +231,6 @@ class Prefs:
             dust=bool(self.get("dust")) and self.dust_available(),
             dust_strength=str(self.get("dustStrength")),
             dust_preview=bool(self.get("dustPreview")),
+            glass_dust=self.glass_dust() if self.get("glassDust") else None,
             note=str(self.get("note")),
         )

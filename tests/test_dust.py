@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
 import unittest
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -103,6 +105,82 @@ class PreviewTest(unittest.TestCase):
         image = frame()
         blank = np.zeros(image.shape[:2], np.uint8)
         self.assertTrue(bool((dust.mark(image, blank) == image).all()))
+
+
+class GlassDustTest(unittest.TestCase):
+    """Dirt whose position is known rather than detected."""
+
+    def record(self, specks, dpi=600, measured=None):
+        from datetime import datetime
+
+        return {
+            "dpi": dpi,
+            "measured": measured or datetime.now().isoformat(timespec="seconds"),
+            "specks_seen": [
+                {"area_px": a, "x_in": x, "y_in": y} for a, x, y in specks
+            ],
+        }
+
+    def test_a_known_speck_lands_where_the_map_says(self) -> None:
+        # 1.0 in across at 600 dpi is 600 px from the scan's origin; a crop
+        # taken from (500, 400) puts it at (100, 200) inside the crop.
+        mask = dust.known_specks(
+            (600, 400), 600, self.record([(30, 1.0, 1.0)]), origin=(500, 400)
+        )
+        self.assertTrue(bool(mask[200, 100]), "the speck is not where the map put it")
+        self.assertLess(int(mask.sum()), 200, "healed far more than one speck")
+
+    def test_a_speck_outside_this_crop_is_ignored(self) -> None:
+        mask = dust.known_specks(
+            (200, 200), 600, self.record([(30, 5.0, 5.0)]), origin=(0, 0)
+        )
+        self.assertEqual(int(mask.sum()), 0)
+
+    def test_a_map_taken_at_another_resolution_still_lines_up(self) -> None:
+        # Calibration is always 600 dpi; film is scanned at 2400.
+        mask = dust.known_specks(
+            (3000, 3000), 2400, self.record([(30, 1.0, 1.0)], dpi=600), origin=(0, 0)
+        )
+        ys, xs = np.nonzero(mask)
+        self.assertTrue(xs.size, "nothing placed")
+        self.assertAlmostEqual(float(xs.mean()), 2400.0, delta=20)
+        self.assertAlmostEqual(float(ys.mean()), 2400.0, delta=20)
+
+    def test_no_map_heals_nothing(self) -> None:
+        for empty in (None, {}, {"specks_seen": []}):
+            with self.subTest(record=empty):
+                self.assertEqual(int(dust.known_specks((80, 80), 600, empty).sum()), 0)
+
+    def test_a_malformed_entry_is_skipped_rather_than_fatal(self) -> None:
+        record = {"dpi": 600, "specks_seen": [{"area_px": "x"}, {"x_in": 0.1, "y_in": 0.1, "area_px": 20}]}
+        mask = dust.known_specks((200, 200), 600, record)
+        self.assertGreater(int(mask.sum()), 0, "the good entry was lost with the bad")
+
+    def test_a_stale_calibration_is_not_used(self) -> None:
+        # The map describes the glass as it was. Clean the glass and it becomes
+        # a list of places with nothing in them, and healing those is
+        # retouching the photograph for no reason.
+        import tempfile
+        from datetime import datetime, timedelta
+
+        from photosplit.blank import CALIBRATION_JSON
+        from photosplit.prefs import Prefs
+        import json
+
+        folder = Path(tempfile.mkdtemp(prefix="photosplit-stale-"))
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        old = (datetime.now() - timedelta(days=400)).isoformat(timespec="seconds")
+        (folder / CALIBRATION_JSON).write_text(json.dumps(self.record([(30, 1.0, 1.0)], measured=old)))
+
+        prefs = Prefs("com.photosplit.tests.stale")
+        import photosplit.blank as blank_module
+
+        real = blank_module.calibration_folder
+        blank_module.calibration_folder = lambda: folder
+        try:
+            self.assertIsNone(prefs.glass_dust(), "used a map from over a year ago")
+        finally:
+            blank_module.calibration_folder = real
 
 
 class AvailabilityTest(unittest.TestCase):

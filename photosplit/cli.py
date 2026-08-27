@@ -30,6 +30,15 @@ def gather(inputs: list[str], recursive: bool) -> list[Path]:
     return sorted({p.resolve() for p in found if "-preview" not in p.stem})
 
 
+def _glass_dust(args: argparse.Namespace) -> dict | None:
+    """The calibration map, when asked for it."""
+    if not args.glass_dust:
+        return None
+    from photosplit.blank import calibration_folder, load_calibration
+
+    return load_calibration(calibration_folder())
+
+
 def _min_size(args: argparse.Namespace) -> float:
     """How small a thing still counts, which depends on what is being split.
 
@@ -57,6 +66,7 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         strip=args.film,
         invert=args.invert,
         note=args.note or "",
+        glass_dust=_glass_dust(args),
         dust=args.dust is not None or args.dust_preview,
         dust_strength=args.dust or "normal",
         dust_preview=args.dust_preview,
@@ -128,6 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--glass-dust",
+        action="store_true",
+        help="heal the dirt the last calibration found on the glass, whose"
+        " position is known rather than guessed",
+    )
     parser.add_argument(
         "--dust-preview",
         action="store_true",

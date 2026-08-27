@@ -42,6 +42,9 @@ class SplitOptions:
     # Ring the specks rather than removing them, so what would be taken can be
     # looked at before it is.
     dust_preview: bool = False
+    # Dirt the calibration already found on the glass, healed with no guessing
+    # because its position is known rather than detected.
+    glass_dust: dict | None = None
     # Free text written into every file: what film, what exposure, what the
     # picture is of. Recoverable from nobody's memory once the strip is filed.
     note: str = ""
@@ -155,15 +158,22 @@ def split_scan(
             if options.invert and film_base is not None:
                 scale = 257.0 if crop.dtype == np.uint16 else 1.0
                 crop = negative.invert(crop, np.asarray(film_base) * scale)
-            if options.dust:
+            if options.dust or options.glass_dust:
                 # After the inversion, on the picture as it will be seen: a
                 # speck is a speck in the positive, whichever way the original
                 # recorded it.
+                found = np.zeros(crop.shape[:2], np.uint8)
+                if options.glass_dust:
+                    x0, y0, _, _ = photo.bounds()
+                    found |= dust_module.known_specks(
+                        crop.shape, dpi, options.glass_dust, origin=(x0, y0)
+                    )
+                if options.dust:
+                    found |= dust_module.find_specks(crop, dpi, options.dust_strength)
                 if options.dust_preview:
-                    found = dust_module.find_specks(crop, dpi, options.dust_strength)
                     crop = dust_module.mark(crop, found)
                 else:
-                    crop, _ = dust_module.remove(crop, dpi, options.dust_strength)
+                    crop = dust_module.heal(crop, found)
             extract.save(crop, target, dpi, quality=options.quality, note=options.note)
         result.written.append(target)
         if on_photo is not None:

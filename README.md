@@ -58,6 +58,7 @@ on the saved file rather than by the scanner. Both are per mode.
 | Negatives — turn them into positives | Post-Processing. On for film, off for prints and slides |
 | Remove dust specks | Post-Processing. Off by default, and unavailable below 1200 dpi — under that a speck cannot be told from film grain, and what it finds in a lawn is the clover |
 | Ring them instead of removing them | Post-Processing. Writes the crops with every speck circled instead of filled, so you can see what would go before it goes |
+| Also heal the dirt the last calibration found | Post-Processing. Needs a calibration, not a resolution: the position is known rather than detected, so it works at any dpi and cannot mistake the photograph for dirt |
 | Metadata | Post-Processing. Free text — film, exposure, what the picture is of — written into every PNG as a Description, where any image tool will find it |
 | Straighten crooked photos | on |
 | Trim leftover scanner background | on |
@@ -203,6 +204,14 @@ A speck has to be small in real units, roughly blob shaped, sitting in a smooth
 surround, and standing well clear of it. A plain threshold instead finds every
 sharp highlight in the picture. Nothing on a busy background is touched, which
 is also where a speck would not have shown anyway.
+
+Dirt **on the glass** is a separate and easier case, and the calibration
+already knows where it is: `--glass-dust`, or the checkbox in the app, heals
+those positions directly. Nothing is detected, so nothing in the photograph can
+be mistaken for dirt, and it works at any resolution. It covers only the platen
+— dust on the film itself still needs detecting — and it is ignored if the
+calibration is more than a month old, because after a clean the map is a list
+of places with nothing in them.
 
 **Look before removing.** `--dust-preview`, and the checkbox beside it in the
 app, writes the crops with every speck ringed rather than filled. Removing one
