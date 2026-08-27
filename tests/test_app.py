@@ -7,6 +7,7 @@ exists, is wired to an action, and stays readable in dark mode.
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 import uuid
@@ -250,6 +251,9 @@ class SplitPathTest(AppTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-app-"))
+        # unittest will not tidy a mkdtemp for us, and these hold whole
+        # synthetic scans: an afternoon of runs left 4 GB in /var/folders.
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.scan = self.dir / "bench.png"
         make(self.scan, SEPARATED)
         self.delegate = build_delegate()

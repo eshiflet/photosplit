@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +27,9 @@ def detect(path: Path):
 class DetectionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        # unittest will not tidy a mkdtemp for us, and these hold whole
+        # synthetic scans: an afternoon of runs left 4 GB in /var/folders.
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
 
     def test_finds_every_separated_photo_at_the_right_size(self) -> None:
         scan = self.dir / "scan.png"
@@ -128,6 +132,7 @@ class ResamplingTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.scan = self.dir / "scan.png"
         make(self.scan, SEPARATED)
 
@@ -174,6 +179,7 @@ class NeutraliseTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.scan = self.dir / "scan.png"
         make(self.scan, SEPARATED)
 
@@ -243,6 +249,7 @@ class NeutraliseTest(unittest.TestCase):
 class CommandLineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.scan = self.dir / "family.png"
         make(self.scan, SEPARATED)
         self.out = self.dir / "out"

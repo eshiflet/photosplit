@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -31,6 +32,9 @@ def bed(dir: Path, name: str, draw=None, w_in: float = 3.0, h_in: float = 4.0) -
 class BlankBedTest(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-blank-"))
+        # unittest will not tidy a mkdtemp for us, and these hold whole
+        # synthetic scans: an afternoon of runs left 4 GB in /var/folders.
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
 
     def test_a_clean_even_bed_reports_nothing_wrong(self) -> None:
         blank, _ = scan_blank.measure(bed(self.dir, "clean.png"), DPI)
@@ -109,6 +113,7 @@ class CalibrationTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="photosplit-cal-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.store = self.dir / "store"
 
     def measure_bed(self, name: str, spots: int) -> tuple:
