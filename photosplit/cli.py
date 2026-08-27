@@ -55,6 +55,7 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         preview=args.preview,
         neutralise=args.neutralise,
         strip=args.film,
+        invert=args.invert,
     )
 
 
@@ -123,6 +124,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--invert",
+        action="store_true",
+        help="the originals are negatives; turn them into positives",
+    )
     parser.add_argument(
         "--film",
         action="store_true",

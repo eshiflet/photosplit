@@ -59,6 +59,7 @@ from .prefs import (
     BIT_DEPTHS,
     MODE_RESOLUTIONS,
     MODES,
+    PRINT,
     QUALITIES,
     QUALITY_LABELS,
     RESOLUTIONS,
@@ -727,6 +728,12 @@ class PreferencesWindow(NSObject):
         )
         view.addSubview_(self.colour_box)
 
+        self.invert_box = checkbox(
+            "Negatives — turn them into positives",
+            NSMakeRect(24, 184, 300, 20), self, "changed:",
+        )
+        view.addSubview_(self.invert_box)
+
         self.calibrate_button = NSButton.alloc().initWithFrame_(
             NSMakeRect(330, 202, 126, 28)
         )
@@ -825,6 +832,9 @@ class PreferencesWindow(NSObject):
             min(range(len(sizes)), key=lambda i: abs(sizes[i] - size))
         )
         self.colour_box.setState_(1 if prefs["colour"] else 0)
+        self.invert_box.setState_(1 if prefs.get("invert") else 0)
+        # Slide film in uncut strips is not a negative, and a print never is.
+        self.invert_box.setEnabled_(prefs.mode != PRINT)
         self.deskew_box.setState_(1 if prefs["deskew"] else 0)
         self.trim_box.setState_(1 if prefs["trim"] else 0)
         self.keep_box.setState_(1 if prefs["keepFullScan"] else 0)
@@ -842,6 +852,7 @@ class PreferencesWindow(NSObject):
         prefs["quality"] = QUALITIES[self.quality_popup.indexOfSelectedItem()]
         prefs.set("minSize", [0.5, 1.0, 1.5, 2.0][self.min_popup.indexOfSelectedItem()])
         prefs["colour"] = bool(self.colour_box.state())
+        prefs.set("invert", bool(self.invert_box.state()))
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())

@@ -65,6 +65,39 @@ def find_frames(
     return frames, background
 
 
+def measure_base(bgr: np.ndarray, dpi: float) -> np.ndarray | None:
+    """The unexposed film base, read off the rebate between the frames.
+
+    This is the reference an inversion needs, and it cannot be a constant:
+    every stock has its own mask, age shifts it, and processing shifts it
+    again. Measuring it from the strip in hand means a roll developed badly
+    thirty years ago still calibrates itself.
+    """
+    grey = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    column = _film_column(grey)
+    if column is None:
+        return None
+    x, y, w, h = column
+    inset = max(1, int(EDGE_INSET_IN * dpi))
+    strip = bgr[y : y + h, x + inset : x + w - inset]
+    grey_strip = grey[y : y + h, x + inset : x + w - inset].astype(np.float32)
+    if grey_strip.size == 0:
+        return None
+
+    smooth = max(3, int(0.01 * dpi) | 1)
+    mean = cv2.blur(grey_strip.mean(axis=1).reshape(-1, 1), (1, smooth)).ravel()
+    spread = cv2.blur(grey_strip.std(axis=1).reshape(-1, 1), (1, smooth)).ravel()
+
+    film = mean < EMPTY_LEVEL
+    if not film.any():
+        return None
+    base_level = float(np.percentile(mean[film], 97))
+    rebate = film & (mean > base_level * BASE_FRACTION) & (spread < GAP_FLATNESS)
+    if rebate.sum() < max(4, int(0.01 * dpi)):
+        return None
+    return strip[rebate].reshape(-1, 3).mean(axis=0)
+
+
 def _film_column(grey: np.ndarray) -> tuple[int, int, int, int] | None:
     """The lit ribbon of film inside the opaque holder."""
     lit = (grey > HOLDER_LEVEL).astype(np.uint8)

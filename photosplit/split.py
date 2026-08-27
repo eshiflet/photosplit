@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from . import extract, film
+from . import extract, film, negative
 from .detect import Photo, find_photos
 
 Image.MAX_IMAGE_PIXELS = None  # 1200 dpi scans are legitimately huge
@@ -34,6 +34,8 @@ class SplitOptions:
     # The originals are one continuous strip of film rather than separate
     # pieces, which is a different problem and wants a different detector.
     strip: bool = False
+    # The originals are negatives, so what comes out has to be turned over.
+    invert: bool = False
     preview: bool = False
     stem: str | None = None  # base name for the output files
 
@@ -122,6 +124,14 @@ def split_scan(
     out_dir = options.output_dir or path.parent / "split"
     stem = options.stem or path.stem
 
+    # Measured once for the whole strip: the rebate is between the frames, so
+    # no single frame contains it.
+    film_base = None
+    if options.invert:
+        film_base = film.measure_base(view, dpi)
+        if film_base is None:
+            film_base = negative.estimate_base(view)
+
     if options.preview:
         result.preview_path = out_dir / f"{stem}-preview.jpg"
         if write:
@@ -133,6 +143,9 @@ def split_scan(
             crop = crop_photo(bgr, photo, background, dpi, options)
             if crop.size == 0:
                 continue
+            if options.invert and film_base is not None:
+                scale = 257.0 if crop.dtype == np.uint16 else 1.0
+                crop = negative.invert(crop, np.asarray(film_base) * scale)
             extract.save(crop, target, dpi, quality=options.quality)
         result.written.append(target)
         if on_photo is not None:

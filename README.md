@@ -151,6 +151,26 @@ the same at every gap. Texture would seem the obvious signal and is the wrong
 one — a frame of empty sky is flatter than the gaps either side of it. A slot
 with no film in it is brighter still and is skipped.
 
+### Turning a negative into a positive
+
+Film mode inverts by default; the checkbox in Preferences turns it off for
+slide film that came in an uncut strip. `--invert` does the same on the
+command line.
+
+The orange mask is not divided out by a constant. Every stock has its own, age
+shifts it, and processing shifts it again, so it is **measured from the strip
+being scanned** — off the unexposed rebate between the frames, the same way
+`--neutralise` measures a lid. A roll developed badly thirty years ago
+calibrates itself.
+
+What gets inverted is density rather than brightness. Film records the
+logarithm of exposure, so each pixel's distance from the base in log space is
+what the scene did, and a display gamma at the end turns that back into
+something to look at.
+
+Colour on old film is approximate and always will be. The scan kept on disk is
+the raw one, so a better inversion later costs a re-run rather than a re-scan.
+
 ## Colour
 
 `--neutralise` colour-balances a scan against its own lid. The lid is white, so
