@@ -596,9 +596,14 @@ class AppDelegate(NSObject):
         shown = str(self.prefs.output_folder).replace(str(Path.home()), "~")
         self.folder_label.setStringValue_(f"Saving to {shown}")
 
-        fmt = str(self.prefs["format"])
+        # Per mode, not the flat keys: those stopped being what a scan uses the
+        # moment the modes arrived, so reading them showed a number that
+        # nothing acted on and did not change when the mode did.
+        fmt = str(self.prefs.get("format"))
         parts = [
-            f"{int(self.prefs['resolution'])} dpi",
+            MODE_LABELS[self.prefs.mode],
+            f"{int(self.prefs.get('resolution'))} dpi",
+            f"{int(self.prefs.get('bitDepth'))}-bit",
             "colour" if self.prefs["colour"] else "greyscale",
             f"JPEG quality {int(self.prefs['quality'])}" if fmt == "jpg" else f"{fmt.upper()}, lossless",
         ]

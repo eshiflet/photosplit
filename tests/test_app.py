@@ -278,6 +278,29 @@ class WindowTest(AppTestCase):
         self.delegate.calibrate_(None)
         self.assertFalse(self.delegate.busy)
 
+    def test_the_footer_follows_the_mode(self) -> None:
+        # It read the flat preference keys, which nothing scans with any more,
+        # so choosing Film left it saying 600 dpi while the scan ran at 2400.
+        prefs = self.delegate.prefs
+        prefs.mode = prefs_module.PRINT
+        self.delegate._refresh_footer()
+        printing = str(self.delegate.settings_label.stringValue())
+        self.assertIn(str(int(prefs.get("resolution", prefs_module.PRINT))), printing)
+
+        prefs.mode = prefs_module.FILM
+        self.delegate._refresh_footer()
+        film = str(self.delegate.settings_label.stringValue())
+        self.assertIn(str(int(prefs.get("resolution", prefs_module.FILM))), film)
+        self.assertNotEqual(printing, film, "the footer did not follow the mode")
+
+    def test_choosing_a_mode_updates_the_footer_and_the_button(self) -> None:
+        prefs = self.delegate.prefs
+        self.delegate.mode_popup.selectItemAtIndex_(prefs_module.MODES.index(prefs_module.FILM))
+        self.delegate.modeChanged_(None)
+        self.assertEqual(prefs.mode, prefs_module.FILM)
+        self.assertIn("2400", str(self.delegate.settings_label.stringValue()))
+        self.assertEqual(self.delegate.scan_button.title(), "Run Film Scan")
+
     def test_log_appends_lines(self) -> None:
         self.delegate._log("first")
         self.delegate._log("second")
