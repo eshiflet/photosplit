@@ -42,6 +42,7 @@ Everything adjustable is in **Preferences** (⌘,):
 | --- | --- |
 | Save photos to | `~/Pictures/Photosplit` |
 | Resolution | Per mode. 600 dpi for prints; 2400 for film, where the frame is 35 mm wide and needs it |
+| Scanning | Prints or Film. Film covers negatives and slides alike: both are scanned through the positive transparency unit, which hands back what is actually on the film. Inverting a negative is done afterwards, on the scan, so it can be redone without scanning again |
 | Save as | PNG (lossless) by default; JPEG or TIFF if you prefer |
 | Depth | 16-bit. Pillow cannot write 16-bit colour at all, so these are written through OpenCV, with the resolution added to the PNG afterwards |
 | JPEG quality | 95. Measured at ~49 dB PSNR against the uncompressed crop, so it is visually transparent; 100 costs about 2.4x the file size for ~3 dB. For analysis work choose PNG or TIFF instead and skip the question |

@@ -11,14 +11,18 @@ SUITE = "com.photosplit.app"
 # What is being scanned decides the functional unit, the resolution, the bit
 # depth and how small a thing still counts as a picture, so each mode carries
 # its own copy of those rather than one set being wrong for two of the three.
-PRINT, NEGATIVE, SLIDE = "print", "negative", "slide"
-MODES = (PRINT, NEGATIVE, SLIDE)
-MODE_LABELS = {PRINT: "Prints", NEGATIVE: "Negatives", SLIDE: "Slides"}
-MODE_ACTIONS = {
-    PRINT: "Run Print Scan",
-    NEGATIVE: "Run Negative Scan",
-    SLIDE: "Run Slide Scan",
-}
+PRINT, FILM = "print", "film"
+MODES = (PRINT, FILM)
+MODE_LABELS = {PRINT: "Prints", FILM: "Film"}
+MODE_ACTIONS = {PRINT: "Run Print Scan", FILM: "Run Film Scan"}
+
+# One film mode, not one for negatives and one for slides. Both now go through
+# the positive transparency unit, so both produce the same scan: the negative
+# unit inverts as it scans and flattens the channels doing it -- measured at a
+# spread of 4.8 between them against 41.4 for the same frame taken positive,
+# which is colour separation that cannot be got back. Negative or slide is
+# therefore a question about processing the scan, not about making it, and it
+# belongs downstream where the answer can be changed without rescanning.
 
 MODE_DEFAULTS: dict[str, dict[str, object]] = {
     # PNG throughout: lossless, holds 16 bits per channel, one format to think
@@ -28,8 +32,7 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
     # band 8-bit data. 2400 rather than the
     # 6400 the V500 advertises: a full strip at 6400 in 16-bit is 5.8 GB, and
     # the measured edge spread says the optics do not resolve anywhere near it.
-    NEGATIVE: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5},
-    SLIDE: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5},
+    FILM: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5},
 }
 
 # A 35 mm frame is 0.94 x 1.42 in, so the print default of 1.0 in would throw
@@ -61,8 +64,7 @@ RESOLUTIONS = [150, 200, 300, 400, 600, 1200]
 # print. The top of each list is what the hardware offers, not what is wise.
 MODE_RESOLUTIONS = {
     PRINT: RESOLUTIONS,
-    NEGATIVE: [1200, 2400, 3200, 4800, 6400],
-    SLIDE: [1200, 2400, 3200, 4800, 6400],
+    FILM: [1200, 2400, 3200, 4800, 6400],
 }
 BIT_DEPTHS = [8, 16]
 BIT_DEPTH_LABELS = ["8-bit", "16-bit — keeps shadow detail through an inversion"]
@@ -152,8 +154,11 @@ class Prefs:
 
     @property
     def unit(self) -> int:
-        from .scanner import FLATBED, NEGATIVE as NEG_UNIT, POSITIVE
-        return {PRINT: FLATBED, NEGATIVE: NEG_UNIT, SLIDE: POSITIVE}[self.mode]
+        from .scanner import FLATBED, POSITIVE
+
+        # Film of either kind goes through the positive unit: it is the one
+        # that hands back what is actually on the film.
+        return {PRINT: FLATBED, FILM: POSITIVE}[self.mode]
 
     def as_split_options(self):
         from .split import SplitOptions

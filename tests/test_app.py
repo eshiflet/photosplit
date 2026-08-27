@@ -192,7 +192,7 @@ class WindowTest(AppTestCase):
         # The failure that cost 27 minutes: the transparency lamp is in the lid,
         # under the white document mat, and with the mat left in the driver sits
         # there forever without ever raising an error.
-        self.delegate.prefs.mode = prefs_module.NEGATIVE
+        self.delegate.prefs.mode = prefs_module.FILM
         advice = " ".join(self.delegate._stall_advice()).lower()
         self.assertIn("mat", advice)
         self.assertIn("off and on", advice)
@@ -469,15 +469,28 @@ class PreferencesTest(AppTestCase):
         window.res_popup.selectItemAtIndex_(RESOLUTIONS.index(300))
         window.changed_(None)
 
-        prefs.mode = prefs_module.NEGATIVE
+        prefs.mode = prefs_module.FILM
         window.show_for_mode()
-        film = prefs_module.MODE_RESOLUTIONS[prefs_module.NEGATIVE]
+        film = prefs_module.MODE_RESOLUTIONS[prefs_module.FILM]
         self.assertEqual(titles(window.res_popup), [f"{r} dpi" for r in film])
         window.res_popup.selectItemAtIndex_(film.index(3200))
         window.changed_(None)
 
-        self.assertEqual(int(prefs.get("resolution", prefs_module.NEGATIVE)), 3200)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.FILM)), 3200)
         self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 300)
+
+    def test_film_goes_through_the_positive_unit(self) -> None:
+        # Not the negative unit, which inverts as it scans and flattens the
+        # channels doing it: measured at a spread of 4.8 between them against
+        # 41.4 for the same frame taken positive. Inverting is downstream work
+        # on a scan that still holds everything the film does.
+        from photosplit.scanner import FLATBED, POSITIVE
+
+        prefs = self.delegate.prefs
+        prefs.mode = prefs_module.FILM
+        self.assertEqual(prefs.unit, POSITIVE)
+        prefs.mode = prefs_module.PRINT
+        self.assertEqual(prefs.unit, FLATBED)
 
     def test_every_mode_captures_deep_and_saves_lossless(self) -> None:
         prefs = self.delegate.prefs
@@ -490,7 +503,7 @@ class PreferencesTest(AppTestCase):
         # A 35 mm frame is 0.94 in on its short side, so the print default of
         # 1.0 would throw every frame away as too small.
         prefs = self.delegate.prefs
-        for mode in (prefs_module.NEGATIVE, prefs_module.SLIDE):
+        for mode in (prefs_module.FILM,):
             with self.subTest(mode=mode):
                 self.assertLess(float(prefs.get("minSize", mode)), 0.94)
         self.assertGreaterEqual(float(prefs.get("minSize", prefs_module.PRINT)), 1.0)
@@ -547,7 +560,7 @@ class PreferencesTest(AppTestCase):
         self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 1200)
         self.assertEqual(str(prefs.get("format", prefs_module.PRINT)), "png")
         # Film keeps its own defaults; the old value was never about film.
-        self.assertEqual(int(prefs.get("resolution", prefs_module.NEGATIVE)), 2400)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.FILM)), 2400)
 
     def test_adoption_does_not_overwrite_a_later_choice(self) -> None:
         store = NSUserDefaults.standardUserDefaults()

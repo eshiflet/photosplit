@@ -225,7 +225,13 @@ class ScanSession(NSObject):
         self._succeed()
 
 
-UNIT_NAMES = {FLATBED: "flatbed", POSITIVE: "slide unit", NEGATIVE: "negative unit"}
+# The positive unit is what all film goes through, negatives included, so it
+# is named for what it is rather than for slides alone.
+UNIT_NAMES = {
+    FLATBED: "flatbed",
+    POSITIVE: "transparency unit",
+    NEGATIVE: "negative unit",
+}
 
 
 def unit_name(unit: int) -> str:
