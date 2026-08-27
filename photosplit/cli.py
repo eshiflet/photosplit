@@ -30,19 +30,31 @@ def gather(inputs: list[str], recursive: bool) -> list[Path]:
     return sorted({p.resolve() for p in found if "-preview" not in p.stem})
 
 
+def _min_size(args: argparse.Namespace) -> float:
+    """How small a thing still counts, which depends on what is being split.
+
+    A 35 mm frame is 0.94 in on its short side, so the print default of 1.0
+    would silently throw away every frame on a strip.
+    """
+    if args.min_size is not None:
+        return float(args.min_size)
+    return 0.5 if args.film else 1.0
+
+
 def options_from(args: argparse.Namespace) -> SplitOptions:
     return SplitOptions(
         output_dir=Path(args.output).expanduser() if args.output else None,
         fmt=args.format,
         quality=args.quality,
         dpi_override=args.dpi,
-        min_size=args.min_size,
+        min_size=_min_size(args),
         separation=args.separation,
         min_fill=args.min_fill,
         deskew=not args.no_deskew,
         trim=not args.no_trim,
         preview=args.preview,
         neutralise=args.neutralise,
+        strip=args.film,
     )
 
 
@@ -94,8 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--min-size",
         type=float,
-        default=1.0,
-        help="ignore anything whose short side is under this many inches (default 1.0)",
+        help="ignore anything whose short side is under this many inches"
+        " (default 1.0, or 0.5 with --film)",
     )
     parser.add_argument(
         "--separation",
@@ -111,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--film",
+        action="store_true",
+        help="the scan is a strip of film, whose frames touch, not separate photos",
+    )
     parser.add_argument(
         "--neutralise",
         "--neutralize",

@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from . import extract
+from . import extract, film
 from .detect import Photo, find_photos
 
 Image.MAX_IMAGE_PIXELS = None  # 1200 dpi scans are legitimately huge
@@ -31,6 +31,9 @@ class SplitOptions:
     deskew: bool = True
     trim: bool = True
     neutralise: bool = False
+    # The originals are one continuous strip of film rather than separate
+    # pieces, which is a different problem and wants a different detector.
+    strip: bool = False
     preview: bool = False
     stem: str | None = None  # base name for the output files
 
@@ -98,13 +101,16 @@ def split_scan(
     # Find the photos in an eight-bit view, cut them out of the real one: every
     # threshold in the detector is a number of levels out of 255.
     view = eight_bit(bgr)
-    photos, background = find_photos(
-        view,
-        dpi=dpi,
-        min_side_in=options.min_size,
-        min_fill=options.min_fill,
-        separation_in=options.separation,
-    )
+    if options.strip:
+        photos, background = film.find_frames(view, dpi=dpi, min_side_in=options.min_size)
+    else:
+        photos, background = find_photos(
+            view,
+            dpi=dpi,
+            min_side_in=options.min_size,
+            min_fill=options.min_fill,
+            separation_in=options.separation,
+        )
     result = SplitResult(scan=path, dpi=dpi, photos=photos)
     if not photos:
         return result

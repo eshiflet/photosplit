@@ -135,6 +135,21 @@ Turn on the marked-up preview first — it shows exactly what was detected.
 | A white border got shaved off | Trim leftover background: off | `--no-trim` |
 | Crops look slightly rotated | Straighten: off | `--no-deskew` |
 | Everything has a colour tint | — | `--neutralise` |
+| A strip of film came out as one image | Scanning: Film | `--film` |
+
+## Film
+
+A strip is not a set of separate photographs. The frames touch, parted only by
+a rebate line a couple of millimetres wide, so the detector that finds prints
+on a lid sees one long ribbon. `--film`, and the Film mode in the app, uses a
+different one.
+
+It splits the strip at its rebate lines, found by brightness rather than by
+texture: unexposed film base is the thinnest part of a negative, so scanned
+through the positive unit it is the brightest thing on the film, and it reads
+the same at every gap. Texture would seem the obvious signal and is the wrong
+one — a frame of empty sky is flatter than the gaps either side of it. A slot
+with no film in it is brighter still and is skipped.
 
 ## Colour
 

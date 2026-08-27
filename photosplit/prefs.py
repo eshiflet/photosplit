@@ -182,4 +182,5 @@ class Prefs:
             deskew=bool(self["deskew"]),
             trim=bool(self["trim"]),
             preview=bool(self["writePreview"]),
+            strip=self.mode == FILM,
         )
