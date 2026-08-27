@@ -50,8 +50,20 @@ from Foundation import NSAttributedString, NSObject, NSOperationQueue
 
 from . import __version__
 from . import blank as blank_module
-from .prefs import FORMAT_LABELS, FORMATS, QUALITIES, QUALITY_LABELS, RESOLUTIONS, Prefs
-from .scanner import ScannerHub, ScanSession, ScanSettings
+from .prefs import (
+    FORMAT_LABELS,
+    FORMATS,
+    MODE_ACTIONS,
+    MODE_LABELS,
+    BIT_DEPTHS,
+    MODE_RESOLUTIONS,
+    MODES,
+    QUALITIES,
+    QUALITY_LABELS,
+    RESOLUTIONS,
+    Prefs,
+)
+from .scanner import FLATBED, ScannerHub, ScanSession, ScanSettings
 from .split import SCAN_SUFFIXES, split_scan
 
 SCAN_TITLE = "Run Scan"
@@ -158,8 +170,17 @@ class AppDelegate(NSObject):
         refresh.setAction_("refresh:")
         view.addSubview_(refresh)
 
-        self.scan_button = NSButton.alloc().initWithFrame_(NSMakeRect(24, 344, 472, 60))
-        self.scan_button.setTitle_(SCAN_TITLE)
+        view.addSubview_(label("Scanning", NSMakeRect(24, 392, 80, 18), bold=True))
+        self.mode_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+            NSMakeRect(90, 387, 200, 26), False
+        )
+        self.mode_popup.addItemsWithTitles_([MODE_LABELS[m] for m in MODES])
+        self.mode_popup.setTarget_(self)
+        self.mode_popup.setAction_("modeChanged:")
+        view.addSubview_(self.mode_popup)
+
+        self.scan_button = NSButton.alloc().initWithFrame_(NSMakeRect(24, 300, 472, 60))
+        self.scan_button.setTitle_(MODE_ACTIONS[self.prefs.mode])
         # A rounded bezel will not grow: its cell is 32 pt tall whatever the
         # frame says, so this button drew a thin capsule floating inside 60 pt
         # of nothing while the 22 pt title crowded the edge of it. The square
@@ -276,6 +297,16 @@ class AppDelegate(NSObject):
         if 0 <= index < len(self.devices):
             self.prefs["scannerName"] = self.devices[index].name()
 
+    def modeChanged_(self, sender) -> None:
+        """Remember what is being scanned, and say so on the button."""
+        index = self.mode_popup.indexOfSelectedItem()
+        if 0 <= index < len(MODES):
+            self.prefs.mode = MODES[index]
+        self._set_busy(self.busy, "")
+        self._refresh_footer()
+        if self.prefs_window is not None:
+            self.prefs_window.show_for_mode()
+
     def refresh_(self, sender) -> None:
         if self.busy:
             return
@@ -291,10 +322,12 @@ class AppDelegate(NSObject):
 
         stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         settings = ScanSettings(
-            resolution=int(self.prefs["resolution"]),
+            resolution=int(self.prefs.get("resolution")),
             colour=bool(self.prefs["colour"]),
             downloads_dir=self._scan_destination(),
             document_name=stamp,
+            unit=self.prefs.unit,
+            bit_depth=int(self.prefs.get("bitDepth")),
         )
         self._set_busy(True, "Waking the scanner…")
         self._log(f"--- {stamp} ---")
@@ -327,6 +360,7 @@ class AppDelegate(NSObject):
             colour=True,
             downloads_dir=Path(tempfile.mkdtemp(prefix="photosplit-calibration-")),
             document_name="blank",
+            unit=FLATBED,  # the glass is the glass, whatever mode the window is in
         )
         self._set_busy(True, "Scanning the empty bed…")
         self._log("--- calibrating the glass ---")
@@ -449,7 +483,9 @@ class AppDelegate(NSObject):
     def _set_busy(self, busy: bool, message: str) -> None:
         self.busy = busy
         self.scan_button.setEnabled_(not busy and bool(self.devices))
-        self.scan_button.setTitle_(SCANNING_TITLE if busy else SCAN_TITLE)
+        self.scan_button.setTitle_(
+            SCANNING_TITLE if busy else MODE_ACTIONS[self.prefs.mode]
+        )
         self.progress.setHidden_(not busy)
         if busy:
             self.progress.startAnimation_(None)
@@ -578,7 +614,8 @@ class PreferencesWindow(NSObject):
         choose.setAction_("chooseFolder:")
         view.addSubview_(choose)
 
-        view.addSubview_(label("Scan quality", NSMakeRect(24, 308, 200, 18), bold=True))
+        self.quality_heading = label("Scan quality", NSMakeRect(24, 308, 300, 18), bold=True)
+        view.addSubview_(self.quality_heading)
         view.addSubview_(label("Resolution", NSMakeRect(24, 280, 90, 18)))
         self.res_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
             NSMakeRect(120, 275, 120, 26), False
@@ -597,9 +634,21 @@ class PreferencesWindow(NSObject):
         self.fmt_popup.setAction_("changed:")
         view.addSubview_(self.fmt_popup)
 
+        view.addSubview_(label("Depth", NSMakeRect(252, 244, 60, 18)))
+        self.depth_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+            NSMakeRect(312, 239, 144, 26), False
+        )
+        self.depth_popup.addItemsWithTitles_([f"{d}-bit" for d in BIT_DEPTHS])
+        self.depth_popup.setTarget_(self)
+        self.depth_popup.setAction_("changed:")
+        self.depth_popup.setToolTip_(
+            "16-bit keeps shadow detail through the inversion a negative needs."
+        )
+        view.addSubview_(self.depth_popup)
+
         view.addSubview_(label("JPEG quality", NSMakeRect(24, 244, 90, 18)))
         self.quality_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(120, 239, 200, 26), False
+            NSMakeRect(120, 239, 120, 26), False
         )
         self.quality_popup.addItemsWithTitles_(QUALITY_LABELS)
         self.quality_popup.setTarget_(self)
@@ -666,6 +715,11 @@ class PreferencesWindow(NSObject):
         self.window.makeKeyAndOrderFront_(None)
 
     @objc.python_method
+    def show_for_mode(self) -> None:
+        """Repopulate for a mode chosen in the main window while this is open."""
+        self._load()
+
+    @objc.python_method
     def close(self) -> None:
         self.window.orderOut_(None)
 
@@ -674,10 +728,20 @@ class PreferencesWindow(NSObject):
         prefs = self.prefs
         home = str(Path.home())
         self.folder_field.setStringValue_(str(prefs.output_folder).replace(home, "~"))
-        resolution = int(prefs["resolution"])
-        if resolution in RESOLUTIONS:
-            self.res_popup.selectItemAtIndex_(RESOLUTIONS.index(resolution))
-        fmt = str(prefs["format"])
+        # The resolutions worth offering depend on what is being scanned, so
+        # the list is rebuilt whenever the mode changes rather than fixed.
+        mode = prefs.mode
+        self.quality_heading.setStringValue_(f"Scan quality — {MODE_LABELS[mode]}")
+        choices = MODE_RESOLUTIONS[mode]
+        self.res_popup.removeAllItems()
+        self.res_popup.addItemsWithTitles_([f"{r} dpi" for r in choices])
+        resolution = int(prefs.get("resolution"))
+        if resolution in choices:
+            self.res_popup.selectItemAtIndex_(choices.index(resolution))
+        depth = int(prefs.get("bitDepth"))
+        if depth in BIT_DEPTHS:
+            self.depth_popup.selectItemAtIndex_(BIT_DEPTHS.index(depth))
+        fmt = str(prefs.get("format"))
         if fmt in FORMATS:
             self.fmt_popup.selectItemAtIndex_(FORMATS.index(fmt))
         quality = int(prefs["quality"])
@@ -686,8 +750,10 @@ class PreferencesWindow(NSObject):
         )
         # Quality is a JPEG idea; PNG and TIFF are lossless either way.
         self.quality_popup.setEnabled_(fmt == "jpg")
+        # 16-bit has nowhere to go in a JPEG.
+        self.depth_popup.setEnabled_(fmt != "jpg")
         sizes = [0.5, 1.0, 1.5, 2.0]
-        size = float(prefs["minSize"])
+        size = float(prefs.get("minSize"))
         self.min_popup.selectItemAtIndex_(
             min(range(len(sizes)), key=lambda i: abs(sizes[i] - size))
         )
@@ -700,17 +766,21 @@ class PreferencesWindow(NSObject):
 
     def changed_(self, sender) -> None:
         prefs = self.prefs
-        prefs["resolution"] = RESOLUTIONS[self.res_popup.indexOfSelectedItem()]
-        prefs["format"] = FORMATS[self.fmt_popup.indexOfSelectedItem()]
+        choices = MODE_RESOLUTIONS[prefs.mode]
+        index = self.res_popup.indexOfSelectedItem()
+        if 0 <= index < len(choices):
+            prefs.set("resolution", choices[index])
+        prefs.set("bitDepth", BIT_DEPTHS[self.depth_popup.indexOfSelectedItem()])
+        prefs.set("format", FORMATS[self.fmt_popup.indexOfSelectedItem()])
         prefs["quality"] = QUALITIES[self.quality_popup.indexOfSelectedItem()]
-        prefs["minSize"] = [0.5, 1.0, 1.5, 2.0][self.min_popup.indexOfSelectedItem()]
+        prefs.set("minSize", [0.5, 1.0, 1.5, 2.0][self.min_popup.indexOfSelectedItem()])
         prefs["colour"] = bool(self.colour_box.state())
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())
         prefs["writePreview"] = bool(self.preview_box.state())
         prefs["revealWhenDone"] = bool(self.reveal_box.state())
-        self.quality_popup.setEnabled_(str(prefs["format"]) == "jpg")
+        self.quality_popup.setEnabled_(str(prefs.get("format")) == "jpg")
         self.owner._refresh_footer()
 
     def chooseFolder_(self, sender) -> None:

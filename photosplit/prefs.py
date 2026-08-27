@@ -8,8 +8,35 @@ from Foundation import NSBundle, NSUserDefaults
 
 SUITE = "com.photosplit.app"
 
+# What is being scanned decides the functional unit, the resolution, the bit
+# depth and how small a thing still counts as a picture, so each mode carries
+# its own copy of those rather than one set being wrong for two of the three.
+PRINT, NEGATIVE, SLIDE = "print", "negative", "slide"
+MODES = (PRINT, NEGATIVE, SLIDE)
+MODE_LABELS = {PRINT: "Prints", NEGATIVE: "Negatives", SLIDE: "Slides"}
+MODE_ACTIONS = {
+    PRINT: "Run Print Scan",
+    NEGATIVE: "Run Negative Scan",
+    SLIDE: "Run Slide Scan",
+}
+
+MODE_DEFAULTS: dict[str, dict[str, object]] = {
+    # A print is opaque and reflective; 600 dpi and 8 bits is plenty.
+    PRINT: {"resolution": 600, "bitDepth": 8, "format": "jpg", "minSize": 1.0},
+    # Film is inverted afterwards, which stretches the shadows hard enough to
+    # band 8-bit data, so 16 bits and a lossless format. 2400 rather than the
+    # 6400 the V500 advertises: a full strip at 6400 in 16-bit is 5.8 GB, and
+    # the measured edge spread says the optics do not resolve anywhere near it.
+    NEGATIVE: {"resolution": 2400, "bitDepth": 16, "format": "tif", "minSize": 0.5},
+    SLIDE: {"resolution": 2400, "bitDepth": 16, "format": "tif", "minSize": 0.5},
+}
+
+# A 35 mm frame is 0.94 x 1.42 in, so the print default of 1.0 in would throw
+# every one of them away as too small. Hence minSize per mode above.
+
 DEFAULTS: dict[str, object] = {
     "outputFolder": str(Path.home() / "Pictures" / "Photosplit"),
+    "scanMode": PRINT,
     "resolution": 600,
     "colour": True,
     "format": "jpg",
@@ -22,10 +49,22 @@ DEFAULTS: dict[str, object] = {
     "revealWhenDone": True,
     "scannerName": "",
 }
+for _mode, _values in MODE_DEFAULTS.items():
+    for _key, _value in _values.items():
+        DEFAULTS[f"{_mode}.{_key}"] = _value
 
 FORMATS = ["jpg", "png", "tif"]
 FORMAT_LABELS = ["JPEG", "PNG (lossless)", "TIFF (lossless)"]
 RESOLUTIONS = [150, 200, 300, 400, 600, 1200]
+# Film is tiny, so it is scanned at resolutions that would be absurd for a
+# print. The top of each list is what the hardware offers, not what is wise.
+MODE_RESOLUTIONS = {
+    PRINT: RESOLUTIONS,
+    NEGATIVE: [1200, 2400, 3200, 4800, 6400],
+    SLIDE: [1200, 2400, 3200, 4800, 6400],
+}
+BIT_DEPTHS = [8, 16]
+BIT_DEPTH_LABELS = ["8-bit", "16-bit — keeps shadow detail through an inversion"]
 # JPEG at 95 is already visually transparent — measured at ~49 dB PSNR against
 # the uncompressed crop — but archival work sometimes wants the top of the range.
 QUALITIES = [85, 90, 95, 98, 100]
@@ -57,12 +96,31 @@ def _open(suite: str) -> NSUserDefaults:
 class Prefs:
     """Thin typed wrapper so the rest of the app never touches raw defaults."""
 
+    # Settings that used to belong to the app and now belong to a mode. An
+    # install from before the modes existed has these sitting in its defaults,
+    # and they were chosen for prints, because prints were all there was.
+    MOVED = ("resolution", "format", "minSize")
+
     def __init__(self, suite: str | None = None) -> None:
         # Read SUITE at call time, not at import: the tests point this at a
         # throwaway domain so that running them cannot rewrite real settings.
         self._suite = suite or SUITE
         self._store = _open(self._suite)
         self._store.registerDefaults_(DEFAULTS)
+        self._adopt_settings_from_before_modes()
+
+    def _adopt_settings_from_before_modes(self) -> None:
+        """Carry pre-mode settings into the print mode, once.
+
+        Only what was actually saved: the registration domain answers for
+        every key whether or not anyone chose it, so asking objectForKey_
+        would migrate the defaults over the top of themselves forever.
+        """
+        saved = self._store.persistentDomainForName_(self._suite) or {}
+        for key in self.MOVED:
+            target = f"{PRINT}.{key}"
+            if key in saved and target not in saved:
+                self._store.setObject_forKey_(saved[key], target)
 
     def __getitem__(self, key: str):
         value = self._store.objectForKey_(key)
@@ -75,14 +133,35 @@ class Prefs:
     def output_folder(self) -> Path:
         return Path(str(self["outputFolder"])).expanduser()
 
+    @property
+    def mode(self) -> str:
+        chosen = str(self["scanMode"])
+        return chosen if chosen in MODES else PRINT
+
+    @mode.setter
+    def mode(self, value: str) -> None:
+        self["scanMode"] = value if value in MODES else PRINT
+
+    def get(self, key: str, mode: str | None = None):
+        """A setting belonging to one mode rather than to the app."""
+        return self[f"{mode or self.mode}.{key}"]
+
+    def set(self, key: str, value, mode: str | None = None) -> None:
+        self[f"{mode or self.mode}.{key}"] = value
+
+    @property
+    def unit(self) -> int:
+        from .scanner import FLATBED, NEGATIVE as NEG_UNIT, POSITIVE
+        return {PRINT: FLATBED, NEGATIVE: NEG_UNIT, SLIDE: POSITIVE}[self.mode]
+
     def as_split_options(self):
         from .split import SplitOptions
 
         return SplitOptions(
             output_dir=self.output_folder,
-            fmt=str(self["format"]),
+            fmt=str(self.get("format")),
             quality=int(self["quality"]),
-            min_size=float(self["minSize"]),
+            min_size=float(self.get("minSize")),
             deskew=bool(self["deskew"]),
             trim=bool(self["trim"]),
             preview=bool(self["writePreview"]),

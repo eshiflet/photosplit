@@ -19,6 +19,8 @@ import objc
 from Foundation import NSURL, NSDate, NSMakeRect, NSObject, NSRunLoop
 
 FLATBED = ICC.ICScannerFunctionalUnitTypeFlatbed
+POSITIVE = ICC.ICScannerFunctionalUnitTypePositiveTransparency
+NEGATIVE = ICC.ICScannerFunctionalUnitTypeNegativeTransparency
 DOCUMENT_UTI = "public.tiff"  # lossless hand-off to the splitter
 
 
@@ -28,6 +30,13 @@ class ScanSettings:
     colour: bool = True
     downloads_dir: Path = Path("/tmp")
     document_name: str = "scan"
+    # Film is a different unit, not a different setting: its own lamp, its own
+    # geometry, its own much smaller window. On a V500 the flatbed is
+    # 8.5 x 11.7 in and either transparency unit is 2.7 x 9.33 in.
+    unit: int = FLATBED
+    # 8 is plenty for a print. A negative is inverted after scanning, which
+    # stretches the shadows hard enough to band 8-bit data visibly.
+    bit_depth: int = 8
 
 
 class ScannerHub(NSObject):
@@ -124,8 +133,8 @@ class ScanSession(NSObject):
             self._fail(f"Could not open the scanner: {error.localizedDescription()}")
 
     def deviceDidBecomeReady_(self, device) -> None:
-        self._on_status("Selecting the flatbed…")
-        device.requestSelectFunctionalUnit_(FLATBED)
+        self._on_status(f"Selecting the {unit_name(self._settings.unit)}…")
+        device.requestSelectFunctionalUnit_(self._settings.unit)
 
     def device_didCloseSessionWithError_(self, device, error) -> None:
         pass
@@ -139,9 +148,13 @@ class ScanSession(NSObject):
 
     # -- ICScannerDeviceDelegate ------------------------------------------
     def scannerDevice_didSelectFunctionalUnit_error_(self, device, unit, error) -> None:
+        wanted = self._settings.unit
         if error is not None:
-            return self._fail(f"No flatbed available: {error.localizedDescription()}")
-        if unit is None or unit.type() != FLATBED:
+            return self._fail(
+                f"This scanner has no {unit_name(wanted)}: {error.localizedDescription()}"
+            )
+        # A scanner reports each unit as it settles; ignore the ones not asked for.
+        if unit is None or unit.type() != wanted:
             return
         try:
             self._configure(device, unit)
@@ -166,9 +179,10 @@ class ScanSession(NSObject):
         unit.setPixelDataType_(
             ICC.ICScannerPixelDataTypeRGB if settings.colour else ICC.ICScannerPixelDataTypeGray
         )
-        unit.setBitDepth_(ICC.ICScannerBitDepth8Bits)
+        unit.setBitDepth_(_depth(unit, settings.bit_depth, self._on_status))
 
-        # Always take the whole bed: photos can be anywhere on the glass.
+        # Always take the whole window: originals can be anywhere in it, and
+        # what "the whole window" means depends on the unit that was selected.
         size = unit.physicalSize()
         unit.setScanArea_(NSMakeRect(0, 0, size.width, size.height))
 
@@ -191,6 +205,29 @@ class ScanSession(NSObject):
         if self._result is None:
             return self._fail("The scanner reported success but produced no file.")
         self._succeed()
+
+
+UNIT_NAMES = {FLATBED: "flatbed", POSITIVE: "slide unit", NEGATIVE: "negative unit"}
+
+
+def unit_name(unit: int) -> str:
+    return UNIT_NAMES.get(unit, "scanner")
+
+
+def _depth(unit, wanted: int, on_status) -> int:
+    """The bit depth asked for, or the deepest the hardware will give.
+
+    Falling back to 8 quietly would be the wrong way round: the whole reason
+    to ask for 16 is film, and film is where losing it shows.
+    """
+    supported = unit.supportedBitDepths()
+    if supported is None or supported.containsIndex_(wanted):
+        return wanted
+    for option in (16, 8):
+        if supported.containsIndex_(option):
+            on_status(f"{wanted}-bit unsupported; using {option}-bit")
+            return option
+    return wanted
 
 
 def _nearest(index_set, wanted: int) -> int:

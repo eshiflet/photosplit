@@ -115,7 +115,7 @@ class WindowTest(AppTestCase):
         self.assertEqual(self.delegate.window.title(), "Photosplit")
         button = self.delegate.scan_button
         self.assertIsInstance(button, NSButton)
-        self.assertEqual(button.title(), "Run Scan")
+        self.assertEqual(button.title(), "Run Print Scan")
 
         # The rounded bezel silently caps its cell at 32 pt, so a 60 pt frame
         # drew a thin capsule adrift in it with the title crammed against the
@@ -385,7 +385,7 @@ class PreferencesStoreTest(AppTestCase):
         self.assertTrue(identifier, "no bundle identifier to test against")
         prefs = prefs_module.Prefs(suite=identifier)
         self.assertIsNotNone(prefs._store)
-        self.assertEqual(int(prefs["resolution"]), prefs_module.DEFAULTS["resolution"])
+        self.assertEqual(int(prefs.get("resolution")), prefs_module.DEFAULTS["print.resolution"])
 
 
 class PreferencesTest(AppTestCase):
@@ -398,7 +398,8 @@ class PreferencesTest(AppTestCase):
 
     def test_every_control_is_offered(self) -> None:
         self.assertEqual(
-            titles(self.prefs_window.res_popup), [f"{r} dpi" for r in RESOLUTIONS]
+            titles(self.prefs_window.res_popup),
+            [f"{r} dpi" for r in prefs_module.MODE_RESOLUTIONS[prefs_module.PRINT]],
         )
         self.assertEqual(titles(self.prefs_window.fmt_popup), FORMAT_LABELS)
         self.assertEqual(titles(self.prefs_window.quality_popup), QUALITY_LABELS)
@@ -411,11 +412,51 @@ class PreferencesTest(AppTestCase):
         window.changed_(None)
 
         prefs = self.delegate.prefs
-        self.assertEqual(int(prefs["resolution"]), 600)
-        self.assertEqual(str(prefs["format"]), "png")
+        self.assertEqual(int(prefs.get("resolution")), 600)
+        self.assertEqual(str(prefs.get("format")), "png")
         options = prefs.as_split_options()
         self.assertEqual(options.fmt, "png")
         self.assertFalse(options.trim)
+
+    def test_each_mode_keeps_its_own_settings(self) -> None:
+        # The whole point of the modes: a resolution right for a print is
+        # wrong for a negative, so changing one must not touch the other.
+        prefs = self.delegate.prefs
+        window = self.prefs_window
+        window.res_popup.selectItemAtIndex_(RESOLUTIONS.index(300))
+        window.changed_(None)
+
+        prefs.mode = prefs_module.NEGATIVE
+        window.show_for_mode()
+        film = prefs_module.MODE_RESOLUTIONS[prefs_module.NEGATIVE]
+        self.assertEqual(titles(window.res_popup), [f"{r} dpi" for r in film])
+        window.res_popup.selectItemAtIndex_(film.index(3200))
+        window.changed_(None)
+
+        self.assertEqual(int(prefs.get("resolution", prefs_module.NEGATIVE)), 3200)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 300)
+
+    def test_film_defaults_are_the_ones_film_needs(self) -> None:
+        prefs = self.delegate.prefs
+        for mode in (prefs_module.NEGATIVE, prefs_module.SLIDE):
+            with self.subTest(mode=mode):
+                self.assertEqual(int(prefs.get("bitDepth", mode)), 16)
+                self.assertEqual(str(prefs.get("format", mode)), "tif")
+                # A 35 mm frame is 0.94 in on its short side, so the print
+                # default of 1.0 would discard every frame as too small.
+                self.assertLess(float(prefs.get("minSize", mode)), 0.94)
+        self.assertEqual(int(prefs.get("bitDepth", prefs_module.PRINT)), 8)
+
+    def test_depth_is_offered_only_where_it_can_survive(self) -> None:
+        window = self.prefs_window
+        window.fmt_popup.selectItemAtIndex_(FORMATS.index("jpg"))
+        window.changed_(None)
+        window._load()
+        self.assertFalse(window.depth_popup.isEnabled(), "16-bit cannot go in a JPEG")
+        window.fmt_popup.selectItemAtIndex_(FORMATS.index("tif"))
+        window.changed_(None)
+        window._load()
+        self.assertTrue(window.depth_popup.isEnabled())
 
     def test_jpeg_quality_reaches_the_saved_files(self) -> None:
         window = self.prefs_window
@@ -443,9 +484,31 @@ class PreferencesTest(AppTestCase):
         self.assertIn("98", shown)
 
     def test_reloading_shows_what_was_saved(self) -> None:
-        self.delegate.prefs["resolution"] = 1200
+        self.delegate.prefs.set("resolution", 1200)
         self.prefs_window._load()
         self.assertEqual(self.prefs_window.res_popup.titleOfSelectedItem(), "1200 dpi")
+
+    def test_settings_saved_before_modes_existed_are_adopted(self) -> None:
+        # Someone who set 1200 dpi for their prints before this change must not
+        # silently drop back to 600 because the key moved underneath them.
+        store = NSUserDefaults.standardUserDefaults()
+        store.removePersistentDomainForName_(_TEST_SUITE)
+        store.setPersistentDomain_forName_({"resolution": 1200, "format": "png"}, _TEST_SUITE)
+
+        prefs = prefs_module.Prefs(_TEST_SUITE)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 1200)
+        self.assertEqual(str(prefs.get("format", prefs_module.PRINT)), "png")
+        # Film keeps its own defaults; the old value was never about film.
+        self.assertEqual(int(prefs.get("resolution", prefs_module.NEGATIVE)), 2400)
+
+    def test_adoption_does_not_overwrite_a_later_choice(self) -> None:
+        store = NSUserDefaults.standardUserDefaults()
+        store.removePersistentDomainForName_(_TEST_SUITE)
+        store.setPersistentDomain_forName_(
+            {"resolution": 1200, "print.resolution": 300}, _TEST_SUITE
+        )
+        prefs = prefs_module.Prefs(_TEST_SUITE)
+        self.assertEqual(int(prefs.get("resolution", prefs_module.PRINT)), 300)
 
     def test_output_folder_drives_the_split_options(self) -> None:
         self.delegate.prefs["outputFolder"] = "/tmp/photosplit-test-out"
