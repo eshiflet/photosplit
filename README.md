@@ -131,6 +131,17 @@ through two scanners and the results diffed:
 .venv/bin/python tools/scan_quality.py "~/Pictures/Photosplit/Full Scans/"*.tiff
 ```
 
+`tools/scan_blank.py` measures the other half: the bed itself, scanned with the
+lid closed and nothing on the glass. It finds dirt, tells you whether it is on
+the glass or inside the optics, measures how far each edge darkens before the
+lighting evens out, and reports whether the colour cast is the same across the
+bed. Run it when a scanner is new to you, and after cleaning the glass to see
+whether the cleaning helped.
+
+```bash
+.venv/bin/python tools/scan_blank.py blank.tiff --map dust.png
+```
+
 It reports colour neutrality, noise, edge sharpness, and how much tonal range
 survives — all measured off the prints and the lid, so the numbers do not
 depend on what the photographs contain. It cannot measure absolute colour
