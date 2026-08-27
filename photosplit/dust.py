@@ -151,6 +151,31 @@ def heal(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
+def mark(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """The picture with every speck ringed, so it can be looked at first.
+
+    Removing a speck is not reversible in the file that gets written, and a
+    false positive takes part of the photograph with it. Cheap to look before
+    deciding, so make looking possible.
+    """
+    if bgr.ndim != 3:
+        return bgr
+    shown = bgr.copy()
+    if mask is None or not mask.any():
+        return shown
+    top = 65535 if shown.dtype == np.uint16 else 255
+    ring = (0, 0, top)  # BGR: red, which no scan of film is going to be short of
+    thickness = max(1, int(round(min(shown.shape[:2]) / 400)))
+    count, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    for index in range(1, count):
+        x, y, w, h, _ = stats[index]
+        pad = max(4, 2 * max(w, h))
+        cv2.rectangle(
+            shown, (x - pad, y - pad), (x + w + pad, y + h + pad), ring, thickness
+        )
+    return shown
+
+
 def remove(
     bgr: np.ndarray, dpi: float, strength: str = DEFAULT_STRENGTH
 ) -> tuple[np.ndarray, int]:

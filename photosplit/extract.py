@@ -198,13 +198,19 @@ def _gain_deep(bgr: np.ndarray, gain: np.ndarray) -> np.ndarray:
     return out
 
 
-def save(crop: np.ndarray, path: Path, dpi: float, quality: int = JPEG_QUALITY) -> None:
-    """Write a crop, tagging it with the scan's resolution."""
+def save(
+    crop: np.ndarray,
+    path: Path,
+    dpi: float,
+    quality: int = JPEG_QUALITY,
+    note: str = "",
+) -> None:
+    """Write a crop, tagging it with the scan's resolution and any note."""
     path.parent.mkdir(parents=True, exist_ok=True)
     jpeg = path.suffix.lower() in {".jpg", ".jpeg"}
 
     if crop.dtype == np.uint16 and not jpeg:
-        _save_deep(crop, path, dpi)
+        _save_deep(crop, path, dpi, note)
         return
     if crop.dtype == np.uint16:
         # A JPEG has nowhere to put the extra bits; say so by rounding rather
@@ -217,9 +223,11 @@ def save(crop: np.ndarray, path: Path, dpi: float, quality: int = JPEG_QUALITY) 
     if jpeg:
         params.update(quality=quality, subsampling=0)
     image.save(path, **params)
+    if note and path.suffix.lower() == ".png":
+        _write_png_text(path, note)
 
 
-def _save_deep(crop: np.ndarray, path: Path, dpi: float) -> None:
+def _save_deep(crop: np.ndarray, path: Path, dpi: float, note: str = "") -> None:
     """Write 16-bit pixels, which Pillow cannot do for colour at all.
 
     OpenCV writes them losslessly and tags a TIFF's resolution, but writes no
@@ -237,22 +245,43 @@ def _save_deep(crop: np.ndarray, path: Path, dpi: float) -> None:
         return
     cv2.imwrite(str(path), crop)
     _write_png_resolution(path, dpi)
+    if note:
+        _write_png_text(path, note)
 
 
 def _write_png_resolution(path: Path, dpi: float) -> None:
     """Put a pHYs chunk into a PNG, which is where a PNG keeps its resolution."""
+    per_metre = int(round(dpi / 0.0254))
+    _insert_png_chunk(
+        path, b"pHYs", per_metre.to_bytes(4, "big") + per_metre.to_bytes(4, "big") + b"\x01"
+    )
+
+
+def _write_png_text(path: Path, note: str, keyword: str = "Description") -> None:
+    """Put a note into a PNG where any image tool will find it.
+
+    tEXt when the note fits Latin-1, which is what everything reads, and iTXt
+    otherwise rather than mangling whatever someone typed.
+    """
+    key = keyword.encode("latin-1")
+    try:
+        _insert_png_chunk(path, b"tEXt", key + b"\x00" + note.encode("latin-1"))
+    except UnicodeEncodeError:
+        body = key + b"\x00\x00\x00" + b"\x00" + b"\x00" + note.encode("utf-8")
+        _insert_png_chunk(path, b"iTXt", body)
+
+
+def _insert_png_chunk(path: Path, kind: bytes, payload: bytes) -> None:
+    """Add a chunk straight after IHDR, which is legal and easy to find."""
     raw = path.read_bytes()
     signature, rest = raw[:8], raw[8:]
-    # IHDR is always the first chunk, and pHYs need only come before the image
-    # data, so directly after it is both legal and easy to find.
     length = int.from_bytes(rest[:4], "big")
     end = 4 + 4 + length + 4
     header, remainder = rest[:end], rest[end:]
 
-    per_metre = int(round(dpi / 0.0254))
-    payload = b"pHYs" + per_metre.to_bytes(4, "big") + per_metre.to_bytes(4, "big") + b"\x01"
-    chunk = len(payload[4:]).to_bytes(4, "big") + payload
-    chunk += (zlib.crc32(payload) & 0xFFFFFFFF).to_bytes(4, "big")
+    body = kind + payload
+    chunk = len(payload).to_bytes(4, "big") + body
+    chunk += (zlib.crc32(body) & 0xFFFFFFFF).to_bytes(4, "big")
     path.write_bytes(signature + header + chunk + remainder)
 
 

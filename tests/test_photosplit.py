@@ -247,6 +247,68 @@ class NeutraliseTest(unittest.TestCase):
             self.assertGreater(a[2], b[2])
 
 
+class NoteTest(unittest.TestCase):
+    """Free text written into the files, since nobody remembers a roll later."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-note-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        self.crop = (np.random.default_rng(2).random((40, 60, 3)) * 255).astype(np.uint8)
+
+    def read_back(self, path: Path):
+        with Image.open(path) as image:
+            return dict(getattr(image, "text", {}))
+
+    def test_a_note_reaches_the_file(self) -> None:
+        path = self.dir / "n.png"
+        extract.save(self.crop, path, 600, note="Kodak T-MAX 400, back garden 1994")
+        self.assertEqual(
+            self.read_back(path).get("Description"), "Kodak T-MAX 400, back garden 1994"
+        )
+
+    def test_a_note_survives_sixteen_bit(self) -> None:
+        deep = (self.crop.astype(np.uint16) * 257)
+        path = self.dir / "deep.png"
+        extract.save(deep, path, 600, note="TMY, f/8")
+        self.assertEqual(self.read_back(path).get("Description"), "TMY, f/8")
+        self.assertEqual(cv2.imread(str(path), cv2.IMREAD_UNCHANGED).dtype, np.uint16)
+
+    def test_a_note_does_not_disturb_the_resolution(self) -> None:
+        path = self.dir / "both.png"
+        extract.save(self.crop, path, 600, note="something")
+        with Image.open(path) as image:
+            self.assertAlmostEqual(image.info["dpi"][0], 600, delta=0.01)
+
+    def test_no_note_writes_no_chunk(self) -> None:
+        path = self.dir / "plain.png"
+        extract.save(self.crop, path, 600)
+        self.assertNotIn("Description", self.read_back(path))
+
+    def test_text_outside_latin1_is_kept_rather_than_mangled(self) -> None:
+        path = self.dir / "wide.png"
+        extract.save(self.crop, path, 600, note="Ilford HP5 — Kraków, 1994 ☂")
+        with Image.open(path) as image:
+            written = dict(getattr(image, "text", {}))
+        self.assertIn("Kraków", written.get("Description", ""))
+
+    def test_the_note_reaches_every_file_a_split_writes(self) -> None:
+        scan = self.dir / "scan.png"
+        make(scan, SEPARATED)
+        result = split_scan(
+            scan,
+            SplitOptions(
+                output_dir=self.dir / "out", fmt="png", dpi_override=DPI,
+                note="roll 12, Kodak Gold 200",
+            ),
+        )
+        self.assertTrue(result.written)
+        for path in result.written:
+            with self.subTest(path=path.name):
+                self.assertEqual(
+                    self.read_back(path).get("Description"), "roll 12, Kodak Gold 200"
+                )
+
+
 class HolderTrimTest(unittest.TestCase):
     """A mount is thick, and its edge shadows the picture it surrounds."""
 

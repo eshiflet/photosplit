@@ -56,8 +56,10 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         neutralise=args.neutralise,
         strip=args.film,
         invert=args.invert,
-        dust=args.dust is not None,
+        note=args.note or "",
+        dust=args.dust is not None or args.dust_preview,
         dust_strength=args.dust or "normal",
+        dust_preview=args.dust_preview,
     )
 
 
@@ -126,6 +128,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--dust-preview",
+        action="store_true",
+        help="ring what dust removal would take, instead of taking it",
+    )
+    parser.add_argument(
+        "--note",
+        help="free text written into every file: film, exposure, what it is of",
+    )
     parser.add_argument(
         "--dust",
         nargs="?",

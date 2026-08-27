@@ -71,6 +71,40 @@ class FindSpecksTest(unittest.TestCase):
         self.assertFalse(dust.too_coarse(2400))
 
 
+class PreviewTest(unittest.TestCase):
+    """Looking before removing, since removing is not reversible in the file."""
+
+    def marked(self, depth=np.uint8):
+        image = frame()
+        speck(image, 200, 200, 4)
+        if depth is np.uint16:
+            image = image.astype(np.uint16) * 257
+        mask = dust.find_specks(image, DPI)
+        return image, mask, dust.mark(image, mask)
+
+    def test_specks_are_ringed_and_left_where_they_are(self) -> None:
+        image, mask, shown = self.marked()
+        self.assertTrue(mask.any(), "nothing to preview")
+        # The speck itself is untouched; only the ring around it is drawn.
+        self.assertTrue(bool((shown[mask > 0] == image[mask > 0]).all()))
+        self.assertFalse(bool((shown == image).all()), "nothing was drawn")
+
+    def test_the_ring_is_visible_against_the_picture(self) -> None:
+        _, _, shown = self.marked()
+        reds = shown[..., 2].astype(int) - shown[..., 1].astype(int)
+        self.assertGreater(int(reds.max()), 80, "the ring does not stand out")
+
+    def test_preview_works_at_sixteen_bits(self) -> None:
+        image, _, shown = self.marked(np.uint16)
+        self.assertEqual(shown.dtype, np.uint16)
+        self.assertFalse(bool((shown == image).all()))
+
+    def test_nothing_to_show_is_not_a_crash(self) -> None:
+        image = frame()
+        blank = np.zeros(image.shape[:2], np.uint8)
+        self.assertTrue(bool((dust.mark(image, blank) == image).all()))
+
+
 class AvailabilityTest(unittest.TestCase):
     """It is the resolution that decides, not the medium."""
 

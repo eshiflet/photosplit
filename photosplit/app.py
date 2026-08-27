@@ -778,33 +778,47 @@ class PreferencesWindow(NSObject):
 
         # -- the second page ------------------------------------------------
         self.correction_heading = label(
-            "Correction", NSMakeRect(24, 344, 400, 18), bold=True
+            "Correction", NSMakeRect(24, 348, 400, 18), bold=True
         )
         after.addSubview_(self.correction_heading)
 
         self.invert_box = checkbox(
             "Negatives — turn them into positives",
-            NSMakeRect(24, 314, 340, 20), self, "changed:",
+            NSMakeRect(24, 320, 340, 20), self, "changed:",
         )
         after.addSubview_(self.invert_box)
 
         self.dust_box = checkbox(
-            "Remove dust specks", NSMakeRect(24, 286, 200, 20), self, "changed:"
+            "Remove dust specks", NSMakeRect(24, 294, 200, 20), self, "changed:"
         )
         after.addSubview_(self.dust_box)
         self.dust_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(228, 281, 120, 26), False
+            NSMakeRect(228, 289, 120, 26), False
         )
         self.dust_popup.addItemsWithTitles_([s.capitalize() for s in DUST_STRENGTHS])
         self.dust_popup.setTarget_(self)
         self.dust_popup.setAction_("changed:")
         after.addSubview_(self.dust_popup)
-        self.dust_note = label("", NSMakeRect(24, 262, 400, 18), secondary=True)
+        self.dust_preview_box = checkbox(
+            "Ring them instead of removing them, to check first",
+            NSMakeRect(44, 266, 380, 20), self, "changed:",
+        )
+        after.addSubview_(self.dust_preview_box)
+        self.dust_note = label("", NSMakeRect(24, 244, 408, 18), secondary=True)
         after.addSubview_(self.dust_note)
 
-        after.addSubview_(label("Finishing", NSMakeRect(24, 220, 200, 18), bold=True))
+        after.addSubview_(label("Metadata", NSMakeRect(24, 206, 200, 18), bold=True))
+        self.note_field = NSTextField.alloc().initWithFrame_(NSMakeRect(24, 176, 408, 24))
+        self.note_field.setPlaceholderString_(
+            "Film, exposure, what the picture is of — written into every file"
+        )
+        self.note_field.setTarget_(self)
+        self.note_field.setAction_("changed:")
+        after.addSubview_(self.note_field)
+
+        after.addSubview_(label("Finishing", NSMakeRect(24, 138, 200, 18), bold=True))
         self.reveal_box = checkbox(
-            "Open the folder when a scan finishes", NSMakeRect(24, 192, 340, 20), self, "changed:"
+            "Open the folder when a scan finishes", NSMakeRect(24, 110, 340, 20), self, "changed:"
         )
         after.addSubview_(self.reveal_box)
 
@@ -886,6 +900,8 @@ class PreferencesWindow(NSObject):
         if strength in DUST_STRENGTHS:
             self.dust_popup.selectItemAtIndex_(DUST_STRENGTHS.index(strength))
         self.dust_popup.setEnabled_(usable and bool(self.dust_box.state()))
+        self.dust_preview_box.setState_(1 if prefs.get("dustPreview") else 0)
+        self.dust_preview_box.setEnabled_(usable and bool(self.dust_box.state()))
         self.correction_heading.setStringValue_(f"Correction — {MODE_LABELS[prefs.mode]}")
         self.dust_note.setStringValue_(
             ""
@@ -900,6 +916,7 @@ class PreferencesWindow(NSObject):
         self.keep_box.setState_(1 if prefs["keepFullScan"] else 0)
         self.preview_box.setState_(1 if prefs["writePreview"] else 0)
         self.reveal_box.setState_(1 if prefs["revealWhenDone"] else 0)
+        self.note_field.setStringValue_(str(prefs.get("note")))
 
     def changed_(self, sender) -> None:
         prefs = self.prefs
@@ -917,11 +934,13 @@ class PreferencesWindow(NSObject):
         index = self.dust_popup.indexOfSelectedItem()
         if 0 <= index < len(DUST_STRENGTHS):
             prefs.set("dustStrength", DUST_STRENGTHS[index])
+        prefs.set("dustPreview", bool(self.dust_preview_box.state()))
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())
         prefs["writePreview"] = bool(self.preview_box.state())
         prefs["revealWhenDone"] = bool(self.reveal_box.state())
+        prefs.set("note", str(self.note_field.stringValue()))
         self.quality_popup.setEnabled_(str(prefs.get("format")) == "jpg")
         self.owner._refresh_footer()
 

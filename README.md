@@ -57,6 +57,8 @@ on the saved file rather than by the scanner. Both are per mode.
 | Ignore anything smaller than | 1 inch for prints, 0.5 for film — a 35 mm frame is 0.94 in on its short side, so the print threshold would discard every one |
 | Negatives — turn them into positives | Post-Processing. On for film, off for prints and slides |
 | Remove dust specks | Post-Processing. Off by default, and unavailable below 1200 dpi — under that a speck cannot be told from film grain, and what it finds in a lawn is the clover |
+| Ring them instead of removing them | Post-Processing. Writes the crops with every speck circled instead of filled, so you can see what would go before it goes |
+| Metadata | Post-Processing. Free text — film, exposure, what the picture is of — written into every PNG as a Description, where any image tool will find it |
 | Straighten crooked photos | on |
 | Trim leftover scanner background | on |
 | Keep the full scan as well | off |
@@ -190,6 +192,27 @@ something to look at.
 
 Colour on old film is approximate and always will be. The scan kept on disk is
 the raw one, so a better inversion later costs a re-run rather than a re-scan.
+
+### Dust
+
+Off by default, and only offered at 1200 dpi or better. Below that the smallest
+speck worth removing covers fewer pixels than the grain does, and the two are
+not separable — on a 600 dpi frame of a lawn what it finds is the clover.
+
+A speck has to be small in real units, roughly blob shaped, sitting in a smooth
+surround, and standing well clear of it. A plain threshold instead finds every
+sharp highlight in the picture. Nothing on a busy background is touched, which
+is also where a speck would not have shown anyway.
+
+**Look before removing.** `--dust-preview`, and the checkbox beside it in the
+app, writes the crops with every speck ringed rather than filled. Removing one
+is not reversible in the file that gets written, and a false positive takes
+part of the photograph with it.
+
+Infrared cleaning would be better than any of this and is not available:
+ImageCaptureCore has no infrared pixel type, and on silver-based black-and-white
+film the image itself is opaque to infrared, so even a scanner offering it would
+read the whole frame as one defect.
 
 ## Colour
 

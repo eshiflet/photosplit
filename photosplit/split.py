@@ -39,6 +39,12 @@ class SplitOptions:
     invert: bool = False
     dust: bool = False
     dust_strength: str = "normal"
+    # Ring the specks rather than removing them, so what would be taken can be
+    # looked at before it is.
+    dust_preview: bool = False
+    # Free text written into every file: what film, what exposure, what the
+    # picture is of. Recoverable from nobody's memory once the strip is filed.
+    note: str = ""
     preview: bool = False
     stem: str | None = None  # base name for the output files
 
@@ -153,8 +159,12 @@ def split_scan(
                 # After the inversion, on the picture as it will be seen: a
                 # speck is a speck in the positive, whichever way the original
                 # recorded it.
-                crop, _ = dust_module.remove(crop, dpi, options.dust_strength)
-            extract.save(crop, target, dpi, quality=options.quality)
+                if options.dust_preview:
+                    found = dust_module.find_specks(crop, dpi, options.dust_strength)
+                    crop = dust_module.mark(crop, found)
+                else:
+                    crop, _ = dust_module.remove(crop, dpi, options.dust_strength)
+            extract.save(crop, target, dpi, quality=options.quality, note=options.note)
         result.written.append(target)
         if on_photo is not None:
             on_photo(index, len(photos), target)
