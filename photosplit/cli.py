@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .dust import DEFAULT_STRENGTH
 from .split import SCAN_SUFFIXES, SplitOptions, split_scan
 
 
@@ -68,7 +69,7 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         note=args.note or "",
         glass_dust=_glass_dust(args),
         dust=args.dust is not None or args.dust_preview,
-        dust_strength=args.dust or "normal",
+        dust_strength=args.dust or DEFAULT_STRENGTH,
         dust_preview=args.dust_preview,
     )
 

@@ -51,7 +51,13 @@ STRENGTHS = {
     "normal": (6.0, 12.0, 3.0),
     "strong": (4.5, 20.0, 2.5),
 }
-DEFAULT_STRENGTH = "normal"
+# Light, because the cost of the two mistakes is not symmetrical. Checked at
+# 1:1 on a TMAX 400 frame: of fourteen candidates at normal, four were plainly
+# dust and five sat on the knit of a sweater with nothing visibly wrong at all;
+# of five at light, four were plainly dust. Missing a speck leaves a speck.
+# Taking a highlight out of a jumper cannot be undone in the file that gets
+# written, and nobody inspects a 2400 dpi frame closely enough to notice.
+DEFAULT_STRENGTH = "light"
 
 
 # Where dust and grain become separable. The measured floor is nearer 1100

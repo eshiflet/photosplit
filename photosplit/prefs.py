@@ -37,7 +37,7 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
     # about. 600 dpi is plenty for an opaque print.
     PRINT: {
         "resolution": 600, "bitDepth": 16, "format": "png", "minSize": 1.0,
-        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
+        "invert": False, "dust": False, "dustStrength": "light", "dustPreview": False, "glassDust": False, "note": "",
     },
     # Film is inverted afterwards, which stretches the shadows hard enough to
     # band 8-bit data. 2400 rather than the
@@ -47,12 +47,12 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
         "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
         # Film strips are usually negatives; slide film in uncut strips is not,
         # so this is a setting rather than a consequence of the mode.
-        "invert": True, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
+        "invert": True, "dust": False, "dustStrength": "light", "dustPreview": False, "glassDust": False, "note": "",
     },
     # A mounted 35 mm slide shows about 1.35 x 0.90 in through its mount.
     SLIDE: {
         "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
-        "invert": False, "dust": False, "dustStrength": "normal", "dustPreview": False, "glassDust": False, "note": "",
+        "invert": False, "dust": False, "dustStrength": "light", "dustPreview": False, "glassDust": False, "note": "",
     },
 }
 

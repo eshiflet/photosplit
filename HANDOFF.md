@@ -71,6 +71,12 @@ Nothing is blocked.
   Scan application for this model on current macOS, only an ICA driver, and
   macOS removed TWAIN years ago. It would not have helped for TMAX anyway:
   silver-based film is opaque to infrared and the whole frame reads as defect.
+- **Dust detection defaults to light, and should stay that way.** Checked at
+  1:1 on a TMAX 400 frame: normal found fourteen candidates of which four were
+  plainly dust and five sat on a jumper's knit with nothing visibly wrong;
+  light found five of which four were plainly dust. Judge any change to this
+  at 1:1 on real film, not downscaled — every earlier look was downscaled and
+  said nothing useful about which detections were real.
 - **Dust cannot be told from grain below about 1200 dpi.** The setting greys
   out under that. On a 600 dpi frame of a lawn what the detector finds is the
   clover.

@@ -205,6 +205,13 @@ surround, and standing well clear of it. A plain threshold instead finds every
 sharp highlight in the picture. Nothing on a busy background is touched, which
 is also where a speck would not have shown anyway.
 
+Three strengths, defaulting to the cautious one. Checked at 1:1 on a frame of
+fast black-and-white film, **light** found five things of which four were
+plainly dust, while **normal** found fourteen of which five sat on the knit of
+a jumper with nothing visibly wrong. The two mistakes do not cost the same: a
+missed speck is a speck, and a highlight taken out of a jumper is gone from the
+file.
+
 Dirt **on the glass** is a separate and easier case, and the calibration
 already knows where it is: `--glass-dust`, or the checkbox in the app, heals
 those positions directly. Nothing is detected, so nothing in the photograph can

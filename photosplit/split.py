@@ -38,7 +38,7 @@ class SplitOptions:
     # The originals are negatives, so what comes out has to be turned over.
     invert: bool = False
     dust: bool = False
-    dust_strength: str = "normal"
+    dust_strength: str = dust_module.DEFAULT_STRENGTH
     # Ring the specks rather than removing them, so what would be taken can be
     # looked at before it is.
     dust_preview: bool = False

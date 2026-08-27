@@ -107,6 +107,26 @@ class PreviewTest(unittest.TestCase):
         self.assertTrue(bool((dust.mark(image, blank) == image).all()))
 
 
+class DefaultStrengthTest(unittest.TestCase):
+    def test_the_default_is_the_cautious_one(self) -> None:
+        # The two mistakes do not cost the same. A missed speck is a speck; a
+        # highlight taken out of a jumper is gone from the file, and nobody
+        # looks at a 2400 dpi frame closely enough to catch it.
+        self.assertEqual(dust.DEFAULT_STRENGTH, "light")
+
+    def test_the_default_finds_less_than_the_others(self) -> None:
+        image = frame()
+        rng = np.random.default_rng(12)
+        for _ in range(12):
+            speck(image, int(rng.integers(30, 370)), int(rng.integers(30, 370)), 4)
+        counts = {
+            name: int(dust.find_specks(image, DPI, name).sum())
+            for name in ("light", "normal", "strong")
+        }
+        self.assertLessEqual(counts["light"], counts["normal"])
+        self.assertLessEqual(counts["normal"], counts["strong"])
+
+
 class GlassDustTest(unittest.TestCase):
     """Dirt whose position is known rather than detected."""
 
