@@ -20,6 +20,7 @@ from AppKit import (
     NSApplicationActivationPolicyAccessory,
     NSButton,
     NSColor,
+    NSForegroundColorAttributeName,
     NSPopUpButton,
 )
 from Foundation import NSBundle, NSUserDefaults
@@ -149,6 +150,26 @@ class WindowTest(AppTestCase):
             back = luminance(view.backgroundColor(), appearance)
             self.assertGreater(
                 abs(text - back), 0.4, f"log text is unreadable in {appearance}"
+            )
+
+    def test_logged_lines_carry_their_own_colour(self) -> None:
+        # Setting the view's textColor is not enough: text appended through
+        # mutableString() arrives with no attributes and draws black whatever
+        # the property says. Check what is actually in the storage, since the
+        # property test above passes happily while the window is unreadable.
+        self.delegate._log("a line")
+        storage = self.delegate.log_view.textStorage()
+        self.assertGreater(storage.length(), 0)
+        attributes = storage.attributesAtIndex_effectiveRange_(0, None)[0]
+        colour = attributes.get(NSForegroundColorAttributeName)
+        self.assertIsNotNone(colour, "logged text carries no colour of its own")
+
+        back = self.delegate.log_view.backgroundColor()
+        for appearance in (NSAppearanceNameAqua, NSAppearanceNameDarkAqua):
+            self.assertGreater(
+                abs(luminance(colour, appearance) - luminance(back, appearance)),
+                0.4,
+                f"logged text is unreadable in {appearance}",
             )
 
     def test_log_appends_lines(self) -> None:

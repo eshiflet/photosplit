@@ -25,6 +25,8 @@ from AppKit import (
     NSButton,
     NSColor,
     NSFont,
+    NSFontAttributeName,
+    NSForegroundColorAttributeName,
     NSMakeRect,
     NSMenu,
     NSMenuItem,
@@ -42,7 +44,7 @@ from AppKit import (
     NSWindowStyleMaskTitled,
     NSWorkspace,
 )
-from Foundation import NSObject, NSOperationQueue
+from Foundation import NSAttributedString, NSObject, NSOperationQueue
 
 from . import __version__
 from .prefs import FORMAT_LABELS, FORMATS, QUALITIES, QUALITY_LABELS, RESOLUTIONS, Prefs
@@ -387,7 +389,20 @@ class AppDelegate(NSObject):
     @objc.python_method
     def _log(self, text: str) -> None:
         storage = self.log_view.textStorage()
-        storage.mutableString().appendString_(text + "\n")
+        # Appending through mutableString() puts characters in with no
+        # attributes at all, which draws them in the default black however the
+        # view's textColor is set -- black on black the moment the Mac is in
+        # dark mode. The colour has to ride on the text itself. textColor()
+        # stays dynamic inside the attributed string, so it still follows the
+        # appearance if it changes while the window is open.
+        line = NSAttributedString.alloc().initWithString_attributes_(
+            text + "\n",
+            {
+                NSForegroundColorAttributeName: NSColor.textColor(),
+                NSFontAttributeName: self.log_view.font(),
+            },
+        )
+        storage.appendAttributedString_(line)
         self.log_view.scrollRangeToVisible_((storage.length(), 0))
 
     @objc.python_method
