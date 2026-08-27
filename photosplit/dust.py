@@ -54,15 +54,16 @@ STRENGTHS = {
 DEFAULT_STRENGTH = "normal"
 
 
-def too_coarse(dpi: float) -> bool:
-    """Whether a scan has the resolution to tell dust from grain at all.
+# Where dust and grain become separable. The measured floor is nearer 1100
+# dpi — below it the smallest speck worth removing covers fewer pixels than the
+# grain does, and what this finds in a lawn is the clover rather than dust —
+# but 1200 is on the resolution menu and a little margin is no loss.
+MIN_DPI = 1200
 
-    Below this the smallest speck worth removing covers fewer pixels than the
-    grain does, and the two are not separable — on a 600 dpi frame the thing
-    this finds in a lawn is the clover, not dust on the film. Better to do
-    nothing and say so.
-    """
-    return (SPECK_MIN_IN * dpi) ** 2 < SPECK_MIN_PX
+
+def too_coarse(dpi: float) -> bool:
+    """Whether a scan has the resolution to tell dust from grain at all."""
+    return dpi < MIN_DPI
 
 
 def find_specks(bgr: np.ndarray, dpi: float, strength: str = DEFAULT_STRENGTH) -> np.ndarray:

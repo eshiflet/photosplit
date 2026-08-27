@@ -51,6 +51,7 @@ from Foundation import NSAttributedString, NSObject, NSOperationQueue, NSTimer
 
 from . import __version__
 from . import blank as blank_module
+from .dust import MIN_DPI as DUST_MIN_DPI
 from .prefs import (
     FORMAT_LABELS,
     FORMATS,
@@ -734,6 +735,13 @@ class PreferencesWindow(NSObject):
         )
         view.addSubview_(self.invert_box)
 
+        self.dust_box = checkbox(
+            "Remove dust specks", NSMakeRect(24, 160, 220, 20), self, "changed:"
+        )
+        view.addSubview_(self.dust_box)
+        self.dust_note = label("", NSMakeRect(246, 160, 220, 18), secondary=True)
+        view.addSubview_(self.dust_note)
+
         self.calibrate_button = NSButton.alloc().initWithFrame_(
             NSMakeRect(330, 202, 126, 28)
         )
@@ -833,6 +841,12 @@ class PreferencesWindow(NSObject):
         )
         self.colour_box.setState_(1 if prefs["colour"] else 0)
         self.invert_box.setState_(1 if prefs.get("invert") else 0)
+        # Dust and grain are only separable above a certain sampling, so the
+        # resolution decides whether this can be offered at all.
+        usable = prefs.dust_available()
+        self.dust_box.setState_(1 if (prefs.get("dust") and usable) else 0)
+        self.dust_box.setEnabled_(usable)
+        self.dust_note.setStringValue_("" if usable else f"needs {DUST_MIN_DPI} dpi or better")
         # Slide film in uncut strips is not a negative, and a print never is.
         self.invert_box.setEnabled_(prefs.mode != PRINT)
         self.deskew_box.setState_(1 if prefs["deskew"] else 0)
@@ -853,6 +867,7 @@ class PreferencesWindow(NSObject):
         prefs.set("minSize", [0.5, 1.0, 1.5, 2.0][self.min_popup.indexOfSelectedItem()])
         prefs["colour"] = bool(self.colour_box.state())
         prefs.set("invert", bool(self.invert_box.state()))
+        prefs.set("dust", bool(self.dust_box.state()))
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())

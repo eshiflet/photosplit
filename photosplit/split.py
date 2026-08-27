@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from . import dust as dust_module
 from . import extract, film, negative
 from .detect import Photo, find_photos
 
@@ -36,6 +37,8 @@ class SplitOptions:
     strip: bool = False
     # The originals are negatives, so what comes out has to be turned over.
     invert: bool = False
+    dust: bool = False
+    dust_strength: str = "normal"
     preview: bool = False
     stem: str | None = None  # base name for the output files
 
@@ -146,6 +149,11 @@ def split_scan(
             if options.invert and film_base is not None:
                 scale = 257.0 if crop.dtype == np.uint16 else 1.0
                 crop = negative.invert(crop, np.asarray(film_base) * scale)
+            if options.dust:
+                # After the inversion, on the picture as it will be seen: a
+                # speck is a speck in the positive, whichever way the original
+                # recorded it.
+                crop, _ = dust_module.remove(crop, dpi, options.dust_strength)
             extract.save(crop, target, dpi, quality=options.quality)
         result.written.append(target)
         if on_photo is not None:

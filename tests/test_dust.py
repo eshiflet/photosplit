@@ -71,6 +71,36 @@ class FindSpecksTest(unittest.TestCase):
         self.assertFalse(dust.too_coarse(2400))
 
 
+class AvailabilityTest(unittest.TestCase):
+    """It is the resolution that decides, not the medium."""
+
+    def test_the_floor_is_the_resolution_not_the_mode(self) -> None:
+        from photosplit.prefs import FILM, PRINT, SLIDE, Prefs
+
+        prefs = Prefs("com.photosplit.tests.dust")
+        prefs.set("resolution", 600, PRINT)
+        self.assertFalse(prefs.dust_available(PRINT))
+        prefs.set("resolution", 1200, PRINT)
+        self.assertTrue(prefs.dust_available(PRINT), "a fine print scan is workable")
+        for mode in (FILM, SLIDE):
+            with self.subTest(mode=mode):
+                prefs.set("resolution", 2400, mode)
+                self.assertTrue(prefs.dust_available(mode))
+                prefs.set("resolution", 1200, mode)
+                self.assertTrue(prefs.dust_available(mode))
+
+    def test_a_coarse_mode_cannot_turn_it_on_by_accident(self) -> None:
+        from photosplit.prefs import PRINT, Prefs
+
+        prefs = Prefs("com.photosplit.tests.dust2")
+        prefs.mode = PRINT
+        prefs.set("resolution", 600)
+        prefs.set("dust", True)
+        self.assertFalse(prefs.as_split_options().dust, "ran below the floor")
+        prefs.set("resolution", 2400)
+        self.assertTrue(prefs.as_split_options().dust)
+
+
 class HealTest(unittest.TestCase):
     def test_a_speck_is_filled_from_its_surroundings(self) -> None:
         image = frame(shade=120)

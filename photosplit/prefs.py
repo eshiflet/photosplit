@@ -35,7 +35,10 @@ MODE_ACTIONS = {
 MODE_DEFAULTS: dict[str, dict[str, object]] = {
     # PNG throughout: lossless, holds 16 bits per channel, one format to think
     # about. 600 dpi is plenty for an opaque print.
-    PRINT: {"resolution": 600, "bitDepth": 16, "format": "png", "minSize": 1.0, "invert": False},
+    PRINT: {
+        "resolution": 600, "bitDepth": 16, "format": "png", "minSize": 1.0,
+        "invert": False, "dust": False, "dustStrength": "normal",
+    },
     # Film is inverted afterwards, which stretches the shadows hard enough to
     # band 8-bit data. 2400 rather than the
     # 6400 the V500 advertises: a full strip at 6400 in 16-bit is 5.8 GB, and
@@ -44,10 +47,13 @@ MODE_DEFAULTS: dict[str, dict[str, object]] = {
         "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
         # Film strips are usually negatives; slide film in uncut strips is not,
         # so this is a setting rather than a consequence of the mode.
-        "invert": True,
+        "invert": True, "dust": False, "dustStrength": "normal",
     },
     # A mounted 35 mm slide shows about 1.35 x 0.90 in through its mount.
-    SLIDE: {"resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5, "invert": False},
+    SLIDE: {
+        "resolution": 2400, "bitDepth": 16, "format": "png", "minSize": 0.5,
+        "invert": False, "dust": False, "dustStrength": "normal",
+    },
 }
 
 # A 35 mm frame is 0.94 x 1.42 in, so the print default of 1.0 in would throw
@@ -168,6 +174,16 @@ class Prefs:
     def set(self, key: str, value, mode: str | None = None) -> None:
         self[f"{mode or self.mode}.{key}"] = value
 
+    def dust_available(self, mode: str | None = None) -> bool:
+        """Whether this mode scans finely enough for dust removal to work.
+
+        It is the resolution that decides, not the medium: a print at 1200 dpi
+        is as workable as a frame of film, and film at 600 is not.
+        """
+        from .dust import too_coarse
+
+        return not too_coarse(float(self.get("resolution", mode)))
+
     @property
     def unit(self) -> int:
         from .scanner import FLATBED, POSITIVE
@@ -189,4 +205,6 @@ class Prefs:
             preview=bool(self["writePreview"]),
             strip=self.mode == FILM,
             invert=bool(self.get("invert")),
+            dust=bool(self.get("dust")) and self.dust_available(),
+            dust_strength=str(self.get("dustStrength")),
         )
