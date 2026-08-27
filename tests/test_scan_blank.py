@@ -10,9 +10,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import scan_blank  # noqa: E402
+from photosplit import blank as scan_blank  # noqa: E402
 
 DPI = 300
 BED = 242
@@ -101,3 +101,82 @@ class BlankBedTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CalibrationTest(unittest.TestCase):
+    """Saving a calibration, and what it tells someone who just cleaned."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-cal-"))
+        self.store = self.dir / "store"
+
+    def measure_bed(self, name: str, spots: int) -> tuple:
+        def draw(image):
+            for i in range(spots):
+                cv2.circle(image, (150 + (i % 5) * 90, 200 + (i // 5) * 90), 5, (90, 90, 90), -1)
+
+        return scan_blank.measure(bed(self.dir, name, draw), DPI)
+
+    def test_a_calibration_round_trips(self) -> None:
+        blank, specks = self.measure_bed("one.png", 6)
+        scan_blank.save_calibration(self.store, blank, specks, self.dir / "one.png")
+
+        loaded = scan_blank.load_calibration(self.store)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["specks"], blank.specks)
+        self.assertIn("measured", loaded)
+        self.assertEqual(len(loaded["specks_seen"]), blank.specks)
+        self.assertTrue((self.store / scan_blank.CALIBRATION_MAP).exists())
+
+    def test_the_previous_calibration_is_kept_for_comparison(self) -> None:
+        first, first_specks = self.measure_bed("first.png", 10)
+        scan_blank.save_calibration(self.store, first, first_specks, self.dir / "first.png")
+        second, second_specks = self.measure_bed("second.png", 3)
+        scan_blank.save_calibration(self.store, second, second_specks, self.dir / "second.png")
+
+        loaded = scan_blank.load_calibration(self.store)
+        self.assertEqual(loaded["specks"], second.specks)
+        self.assertEqual(loaded["previous"]["specks"], first.specks)
+        # One generation only; a chain of these would grow without bound.
+        self.assertNotIn("previous", loaded["previous"])
+
+    def test_a_missing_or_broken_calibration_is_not_fatal(self) -> None:
+        self.assertIsNone(scan_blank.load_calibration(self.store))
+        self.store.mkdir(parents=True)
+        (self.store / scan_blank.CALIBRATION_JSON).write_text("{ not json")
+        self.assertIsNone(scan_blank.load_calibration(self.store))
+
+    def test_the_verdict_says_which_way_the_glass_went(self) -> None:
+        dirty, dirty_specks = self.measure_bed("dirty.png", 12)
+        clean, clean_specks = self.measure_bed("clean2.png", 2)
+
+        first = scan_blank.verdict(dirty, None)
+        self.assertIn("speck", first[0])
+        self.assertTrue(all("last time" not in line for line in first))
+
+        scan_blank.save_calibration(self.store, dirty, dirty_specks, self.dir / "dirty.png")
+        improved = scan_blank.verdict(clean, scan_blank.load_calibration(self.store))
+        self.assertTrue(any("cleaner than last time" in line for line in improved))
+
+        scan_blank.save_calibration(self.store, clean, clean_specks, self.dir / "clean2.png")
+        worse = scan_blank.verdict(dirty, scan_blank.load_calibration(self.store))
+        self.assertTrue(any("dirtier than last time" in line for line in worse))
+
+    def test_the_verdict_names_the_margin_to_keep_prints_out_of(self) -> None:
+        # The number that matters most after a calibration is where a print may
+        # safely be laid, because a vignetted margin welds prints together.
+        def draw(image):
+            for x in range(int(0.3 * DPI)):
+                image[:, x] = BED - int(40 * (1 - x / (0.3 * DPI)))
+
+        blank, _ = scan_blank.measure(bed(self.dir, "vig.png", draw), DPI)
+        lines = scan_blank.verdict(blank, None)
+        self.assertTrue(any("clear of the left edge" in line for line in lines))
+
+    def test_internal_dust_is_called_out_as_uncleanable(self) -> None:
+        def draw(image):
+            image[:, 200:400] = BED - 12
+
+        blank, _ = scan_blank.measure(bed(self.dir, "inside.png", draw), DPI)
+        lines = scan_blank.verdict(blank, None)
+        self.assertTrue(any("inside the scanner" in line for line in lines))
