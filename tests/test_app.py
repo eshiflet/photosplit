@@ -98,6 +98,11 @@ class AppTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         NSUserDefaults.standardUserDefaults().removePersistentDomainForName_(_TEST_SUITE)
+        # Nothing in here may open a Finder window. Several of these run a
+        # whole split, and revealWhenDone defaults to on, so every run of the
+        # suite used to leave another handful of windows open on the machine
+        # that ran it -- dozens of them after an afternoon's work.
+        prefs_module.Prefs(_TEST_SUITE)["revealWhenDone"] = False
 
 
 class WindowTest(AppTestCase):
@@ -249,6 +254,15 @@ class SplitPathTest(AppTestCase):
         make(self.scan, SEPARATED)
         self.delegate = build_delegate()
         self.delegate.prefs["outputFolder"] = str(self.dir / "out")
+
+    def test_splitting_here_never_opens_a_finder_window(self) -> None:
+        # The tests below run whole splits. With revealWhenDone left at its
+        # default each one hands Finder a window that nobody closes, and they
+        # pile up across runs on whichever Mac is running the suite.
+        self.assertFalse(
+            bool(self.delegate.prefs["revealWhenDone"]),
+            "a test that reveals its output leaves Finder windows behind",
+        )
 
     def test_dropped_scan_is_split_into_files_and_the_original_kept(self) -> None:
         self.delegate._run_split([self.scan], source="dropped", dpi=300)
