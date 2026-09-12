@@ -55,6 +55,11 @@ Nothing is blocked.
 - **More post-processing.** Contrast and colour work. The page exists for it,
   and the strip whose colour came out weakest is the case that needs it.
 
+Output is checked as it is written. `photosplit/review.py` reads each crop
+back and flags blanks, near-black, blown, crushed and fragments; both front
+ends put a line in the log, and `tools/check_scans.py` audits a folder. This
+exists because every failure here has written files and reported success.
+
 ## Traps worth knowing
 
 - **A film scan that never starts is almost always the document mat.** The

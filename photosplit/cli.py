@@ -99,6 +99,12 @@ def process(path: Path, args: argparse.Namespace) -> int:
             print(detail)
         else:
             print(f"{detail}  -> {target if args.verbose else target.name}")
+    if not args.dry_run and result.written:
+        from photosplit.review import review
+
+        for finding in review(result.written, result.dpi):
+            print(f"  ** {finding.path.name} may be wrong: {finding.detail}")
+
     if reached:
         print(
             f"  note: {reached} photo(s) reach the edge of the scan area and may be"

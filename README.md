@@ -244,6 +244,28 @@ but cannot tell you whether a red is the right red. That needs a target with
 known values on the glass, an IT8 or a ColorChecker. It is off by default,
 because it changes the colour of what you get out.
 
+## Checking what came out
+
+Every way this can go wrong writes files and reports success. A strip splits
+into one frame, a print merges with its neighbour, a scan through the wrong
+setting comes back washed out — and the log says how many photographs it saved
+either way.
+
+So it reads them back and says which are not photographs:
+
+```bash
+.venv/bin/python tools/check_scans.py ~/Pictures/Photosplit -r
+```
+
+It complains about crops that are blank, nearly black, blown out, crushed, or
+far smaller than the ones beside them, which is the signature of one photograph
+having been split into pieces. The same check runs after every scan and puts a
+line in the log, so a bad batch says so at the time rather than being found
+months later.
+
+It is not a measure of quality — `scan_quality.py` is that. It only asks
+whether what came out is a photograph at all.
+
 ## Comparing two scanners
 
 `tools/scan_quality.py` measures a full-bed scan so the same photos can be run
@@ -282,6 +304,8 @@ including one, edge rise, that looks like a measure of sharpness and is not.
 | `photosplit/film.py` | Splits a strip of film into frames at its rebate lines |
 | `photosplit/negative.py` | Turns a scanned negative into a positive |
 | `photosplit/blank.py` | Measures an empty bed: dirt, vignetting, colour cast |
+| `photosplit/review.py` | Reads written crops back and says which look wrong |
+| `photosplit/dust.py` | Finds dust and fills it in |
 | `photosplit/extract.py` | Rotates, crops, trims, saves; draws the preview |
 | `photosplit/split.py` | The scan-to-files step, shared by the app and the CLI |
 | `photosplit/app.py` | The window, the scan button, Preferences, calibration |
@@ -291,6 +315,7 @@ including one, edge rise, that looks like a measure of sharpness and is not.
 | `tools/scan_quality.py` | Measures a scan, for comparing scanners |
 | `tools/scanner_info.py` | Reports a scanner's reachable area and resolutions |
 | `tools/scan_blank.py` | Measures an empty bed from the command line |
+| `tools/check_scans.py` | Reads written photographs back and flags the wrong ones |
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .

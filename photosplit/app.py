@@ -590,6 +590,14 @@ class AppDelegate(NSObject):
     def _split_finished(self, written: list[Path], reveal: bool) -> None:
         self._set_busy(False, f"{len(written)} photo(s) saved")
         self._log(f"Saved {len(written)} photo(s) to {self.prefs.output_folder}")
+        # Say so here rather than leaving it to be noticed months later.
+        try:
+            from .review import review
+
+            for finding in review(written):
+                self._log(f"  ** {finding.path.name} may be wrong: {finding.detail}")
+        except Exception:
+            pass  # a check that fails must never cost someone their scan
         if written and reveal:
             NSWorkspace.sharedWorkspace().activateFileViewerSelectingURLs_(
                 [_url(written[0])]
