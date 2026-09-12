@@ -259,7 +259,10 @@ So it reads them back and says which are not photographs:
 
 It complains about crops that are blank, nearly black, blown out, crushed, or
 far smaller than the ones beside them, which is the signature of one photograph
-having been split into pieces. The same check runs after every scan and puts a
+having been split into pieces. It also reads the filenames: crops are numbered
+from 01 within a scan, so a hole in the numbering means a photograph that was
+found and written and is no longer there — the files that remain are perfect,
+and nothing in a pixel can show the absence. The same check runs after every scan and puts a
 line in the log, so a bad batch says so at the time rather than being found
 months later.
 

@@ -110,5 +110,49 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual([f.path.name for f in review(paths)], [])
 
 
+class MissingFromBatchTest(unittest.TestCase):
+    """A photograph that was written and then lost leaves no trace in a pixel."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-gap-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+
+    def batch(self, stem: str, numbers) -> list[Path]:
+        return [
+            write(self.dir, f"{stem}-{n:02d}.png", photograph(seed=n)) for n in numbers
+        ]
+
+    def test_a_hole_in_the_numbering_is_found(self) -> None:
+        found = review(self.batch("2026-08-27-005653", [4]))
+        self.assertEqual(len(found), 1)
+        self.assertIn("missing 01, 02, 03", found[0].detail)
+
+    def test_a_complete_batch_is_quiet(self) -> None:
+        self.assertEqual(review(self.batch("scan", [1, 2, 3, 4])), [])
+
+    def test_only_the_gap_is_reported_not_every_file(self) -> None:
+        found = review(self.batch("scan", [1, 3, 4, 5]))
+        self.assertEqual(len(found), 1, "reported more than the one gap")
+        self.assertIn("missing 02", found[0].detail)
+
+    def test_two_batches_are_judged_separately(self) -> None:
+        paths = self.batch("first", [1, 2, 3]) + self.batch("second", [2, 3])
+        found = review(paths)
+        self.assertEqual(len(found), 1)
+        self.assertIn("second", found[0].detail)
+
+    def test_a_long_run_of_gaps_is_summarised(self) -> None:
+        found = review(self.batch("scan", [20]))
+        self.assertIn("and", found[0].detail)
+        self.assertLess(len(found[0].detail), 200, "listed every missing number")
+
+    def test_files_that_are_not_numbered_are_left_alone(self) -> None:
+        paths = [
+            write(self.dir, "holiday.png", photograph()),
+            write(self.dir, "another.png", photograph(seed=5)),
+        ]
+        self.assertEqual(review(paths), [])
+
+
 if __name__ == "__main__":
     unittest.main()
