@@ -41,9 +41,18 @@ def turn(bgr: np.ndarray, degrees: int) -> np.ndarray:
     return bgr if how is None else cv2.rotate(bgr, how)
 
 
+def _quiet() -> None:
+    """Stop OpenCV narrating its backend choice once per photograph."""
+    try:
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    except Exception:
+        pass
+
+
 def _detector(size: tuple[int, int]):
     if not MODEL.exists():
         return None
+    _quiet()
     try:
         return cv2.FaceDetectorYN.create(str(MODEL), "", size, MIN_SCORE)
     except Exception:
