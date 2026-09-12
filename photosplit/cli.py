@@ -68,6 +68,7 @@ def options_from(args: argparse.Namespace) -> SplitOptions:
         invert=args.invert,
         note=args.note or "",
         glass_dust=_glass_dust(args),
+        upright=args.upright,
         dust=args.dust is not None or args.dust_preview,
         dust_strength=args.dust or DEFAULT_STRENGTH,
         dust_preview=args.dust_preview,
@@ -105,6 +106,9 @@ def process(path: Path, args: argparse.Namespace) -> int:
         detail = f"  {number:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°"
         if photo.clipped:
             detail += "  ** reaches the edge of the scan area **"
+        turned = result.turned.get(target.name)
+        if turned:
+            detail += f"  turned {turned}°"
         if args.dry_run:
             print(detail)
         else:
@@ -155,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-deskew", action="store_true", help="do not straighten crops")
     parser.add_argument("--no-trim", action="store_true", help="keep any background sliver")
+    parser.add_argument(
+        "--upright",
+        action="store_true",
+        help="turn each photograph the way up its faces say it goes",
+    )
     parser.add_argument(
         "--glass-dust",
         action="store_true",

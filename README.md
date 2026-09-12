@@ -55,6 +55,7 @@ on the saved file rather than by the scanner. Both are per mode.
 | JPEG quality | 95. Measured at ~49 dB PSNR against the uncompressed crop, so it is visually transparent; 100 costs about 2.4x the file size for ~3 dB. For analysis work choose PNG or TIFF instead and skip the question |
 | Scan in colour | on |
 | Ignore anything smaller than | 1 inch for prints, 0.5 for film — a 35 mm frame is 0.94 in on its short side, so the print threshold would discard every one |
+| Turn photographs upright | Post-Processing. Off by default. Uses faces to decide which way up a print went on the glass; leaves anything it cannot read alone |
 | Negatives — turn them into positives | Post-Processing. On for film, off for prints and slides |
 | Remove dust specks | Post-Processing. Off by default, and unavailable below 1200 dpi — under that a speck cannot be told from film grain, and what it finds in a lawn is the clover |
 | Ring them instead of removing them | Post-Processing. Writes the crops with every speck circled instead of filled, so you can see what would go before it goes |
@@ -231,6 +232,25 @@ ImageCaptureCore has no infrared pixel type, and on silver-based black-and-white
 film the image itself is opaque to infrared, so even a scanner offering it would
 read the whole frame as one defect.
 
+### Which way up
+
+A print laid sideways on the glass is scanned sideways, and nothing in the
+pixels says which edge was the top — not brightness, not composition, not the
+sky, which is only usually up and only outdoors. Faces do say, and they are in
+most photographs worth keeping.
+
+`--upright`, and the checkbox in the app, offers each photograph to a face
+detector four times, once each way round, and turns it whichever way finds the
+most convincing faces. **A picture with no face in it is left exactly as it
+was**, as is one where two ways round score too alike to separate: turning on a
+narrow win is how a photograph ends up upside down.
+
+The detector is [YuNet](https://github.com/opencv/opencv_zoo) by Shiqi Yu, MIT
+licensed, vendored in `photosplit/models/` at 227 KB so that scanning never
+needs the network. If it will not load, photographs are left alone.
+
+Turning is lossless — a quarter, half or three quarters, no resampling.
+
 ## Colour
 
 `--neutralise` colour-balances a scan against its own lid. The lid is white, so
@@ -308,6 +328,7 @@ including one, edge rise, that looks like a measure of sharpness and is not.
 | `photosplit/negative.py` | Turns a scanned negative into a positive |
 | `photosplit/blank.py` | Measures an empty bed: dirt, vignetting, colour cast |
 | `photosplit/review.py` | Reads written crops back and says which look wrong |
+| `photosplit/upright.py` | Decides which way up a photograph goes, from its faces |
 | `photosplit/dust.py` | Finds dust and fills it in |
 | `photosplit/extract.py` | Rotates, crops, trims, saves; draws the preview |
 | `photosplit/split.py` | The scan-to-files step, shared by the app and the CLI |

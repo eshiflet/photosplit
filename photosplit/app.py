@@ -855,16 +855,16 @@ class PreferencesWindow(NSObject):
 
         self.invert_box = checkbox(
             "Negatives — turn them into positives",
-            NSMakeRect(24, 320, 340, 20), self, "changed:",
+            NSMakeRect(24, 322, 340, 20), self, "changed:",
         )
         after.addSubview_(self.invert_box)
 
         self.dust_box = checkbox(
-            "Remove dust specks", NSMakeRect(24, 294, 200, 20), self, "changed:"
+            "Remove dust specks", NSMakeRect(24, 266, 200, 20), self, "changed:"
         )
         after.addSubview_(self.dust_box)
         self.dust_popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(228, 289, 120, 26), False
+            NSMakeRect(228, 261, 120, 26), False
         )
         self.dust_popup.addItemsWithTitles_([s.capitalize() for s in DUST_STRENGTHS])
         self.dust_popup.setTarget_(self)
@@ -872,19 +872,25 @@ class PreferencesWindow(NSObject):
         after.addSubview_(self.dust_popup)
         self.dust_preview_box = checkbox(
             "Ring them instead of removing them, to check first",
-            NSMakeRect(44, 266, 380, 20), self, "changed:",
+            NSMakeRect(44, 238, 380, 20), self, "changed:",
         )
         after.addSubview_(self.dust_preview_box)
+        self.upright_box = checkbox(
+            "Turn photographs upright, where faces say which way",
+            NSMakeRect(24, 296, 408, 20), self, "changed:",
+        )
+        after.addSubview_(self.upright_box)
+
         self.glass_box = checkbox(
             "Also heal the dirt the last calibration found on the glass",
-            NSMakeRect(24, 240, 408, 20), self, "changed:",
+            NSMakeRect(24, 212, 408, 20), self, "changed:",
         )
         after.addSubview_(self.glass_box)
-        self.dust_note = label("", NSMakeRect(24, 218, 408, 18), secondary=True)
+        self.dust_note = label("", NSMakeRect(24, 190, 408, 18), secondary=True)
         after.addSubview_(self.dust_note)
 
-        after.addSubview_(label("Metadata", NSMakeRect(24, 186, 200, 18), bold=True))
-        self.note_field = NSTextField.alloc().initWithFrame_(NSMakeRect(24, 156, 408, 24))
+        after.addSubview_(label("Metadata", NSMakeRect(24, 154, 200, 18), bold=True))
+        self.note_field = NSTextField.alloc().initWithFrame_(NSMakeRect(24, 124, 408, 24))
         self.note_field.setPlaceholderString_(
             "Film, exposure, what the picture is of — written into every file"
         )
@@ -892,9 +898,9 @@ class PreferencesWindow(NSObject):
         self.note_field.setAction_("changed:")
         after.addSubview_(self.note_field)
 
-        after.addSubview_(label("Finishing", NSMakeRect(24, 120, 200, 18), bold=True))
+        after.addSubview_(label("Finishing", NSMakeRect(24, 90, 200, 18), bold=True))
         self.reveal_box = checkbox(
-            "Open the folder when a scan finishes", NSMakeRect(24, 92, 340, 20), self, "changed:"
+            "Open the folder when a scan finishes", NSMakeRect(24, 62, 340, 20), self, "changed:"
         )
         after.addSubview_(self.reveal_box)
 
@@ -979,6 +985,7 @@ class PreferencesWindow(NSObject):
         self.dust_preview_box.setState_(1 if prefs.get("dustPreview") else 0)
         self.dust_preview_box.setEnabled_(usable and bool(self.dust_box.state()))
         # Independent of detection: this needs no resolution, only a map.
+        self.upright_box.setState_(1 if prefs.get("upright") else 0)
         mapped = prefs.glass_dust() is not None
         self.glass_box.setState_(1 if (prefs.get("glassDust") and mapped) else 0)
         self.glass_box.setEnabled_(mapped)
@@ -1017,6 +1024,7 @@ class PreferencesWindow(NSObject):
             prefs.set("dustStrength", DUST_STRENGTHS[index])
         prefs.set("dustPreview", bool(self.dust_preview_box.state()))
         prefs.set("glassDust", bool(self.glass_box.state()))
+        prefs.set("upright", bool(self.upright_box.state()))
         prefs["deskew"] = bool(self.deskew_box.state())
         prefs["trim"] = bool(self.trim_box.state())
         prefs["keepFullScan"] = bool(self.keep_box.state())

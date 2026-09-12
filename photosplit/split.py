@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 from . import dust as dust_module
+from . import upright as upright_module
 from . import extract, film, negative
 from .detect import Photo, find_photos
 
@@ -45,6 +46,8 @@ class SplitOptions:
     # Dirt the calibration already found on the glass, healed with no guessing
     # because its position is known rather than detected.
     glass_dust: dict | None = None
+    # Turn each photograph the way up its faces say it goes.
+    upright: bool = False
     # Free text written into every file: what film, what exposure, what the
     # picture is of. Recoverable from nobody's memory once the strip is filed.
     note: str = ""
@@ -58,6 +61,7 @@ class SplitResult:
     dpi: float
     photos: list[Photo] = field(default_factory=list)
     written: list[Path] = field(default_factory=list)
+    turned: dict[str, int] = field(default_factory=dict)
     preview_path: Path | None = None
 
     @property
@@ -158,6 +162,10 @@ def split_scan(
             if options.invert and film_base is not None:
                 scale = 257.0 if crop.dtype == np.uint16 else 1.0
                 crop = negative.invert(crop, np.asarray(film_base) * scale)
+            if options.upright:
+                crop, turned = upright_module.upright(crop)
+                if turned:
+                    result.turned[target.name] = turned
             if options.dust or options.glass_dust:
                 # After the inversion, on the picture as it will be seen: a
                 # speck is a speck in the positive, whichever way the original

@@ -123,7 +123,14 @@ exists because every failure here has written files and reported success.
   `prefs["resolution"]` still exists for migration and is not what a scan uses;
   `prefs.get("resolution")` is. Reading the wrong one put a stale number in the
   main window that never changed when the mode did.
-- Photosplit straightens photographs but cannot know which way is up.
+- **Which way up is decided by faces or not at all.** `upright.py` offers each
+  crop to YuNet four ways round and turns it to whichever finds the best
+  faces, declining when nothing is convincing or two ways round score alike.
+  On a real bed of five prints it turned three correctly, left a handwritten
+  list alone, and declined one close call — no photograph was turned wrongly,
+  which is the property that matters. The model is vendored (MIT, 227 KB) so
+  a scan never needs the network.
+- Photosplit cannot know which way is up without faces.
 - Tests must never touch the installed app's preferences, and must leave no
   Finder windows or temporary folders behind. All three are pinned by tests.
 
