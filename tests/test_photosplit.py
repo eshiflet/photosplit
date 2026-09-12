@@ -263,7 +263,8 @@ class WhyNothingTest(unittest.TestCase):
         together actually produced on a real scan.
         """
         rng = np.random.default_rng(5)
-        bed = np.full((int(11 * DPI), int(8.5 * DPI), 3), 20, np.uint8)
+        # A white lid, which is the case where touching is the real problem.
+        bed = np.full((int(11 * DPI), int(8.5 * DPI), 3), 242, np.uint8)
         for x0, y0, x1, y1 in (
             (int(0.4 * DPI), int(0.4 * DPI), int(4.4 * DPI), int(3.4 * DPI)),
             (int(0.4 * DPI), int(3.4 * DPI), int(3.4 * DPI), int(8.4 * DPI)),
@@ -293,8 +294,15 @@ class WhyNothingTest(unittest.TestCase):
         # rectangular. No threshold fixes that, so do not suggest one.
         rng = np.random.default_rng(8)
         bed = np.full((int(11 * DPI), int(8.5 * DPI), 3), 55, np.uint8)
-        block = rng.integers(0, 255, (int(4 * DPI), int(3 * DPI), 3)).astype(np.uint8)
-        bed[int(0.5 * DPI) : int(4.5 * DPI), int(0.5 * DPI) : int(3.5 * DPI)] = block
+        # A print whose own shadows sit at the backing's level: the mask then
+        # catches only the bright half and the blob is not a rectangle.
+        top, left = int(0.5 * DPI), int(0.5 * DPI)
+        block = np.full((int(4 * DPI), int(3 * DPI), 3), 58, np.uint8)
+        block[: int(1.6 * DPI)] = rng.integers(150, 250, (int(1.6 * DPI), int(3 * DPI), 3))
+        block[int(1.6 * DPI) :, : int(0.9 * DPI)] = rng.integers(
+            150, 250, (block.shape[0] - int(1.6 * DPI), int(0.9 * DPI), 3)
+        )
+        bed[top : top + block.shape[0], left : left + block.shape[1]] = block
         why = explain_nothing_found(bed, DPI, min_side_in=1.0, min_fill=0.95)
         self.assertIn("white mat", why)
         self.assertNotIn("--min-fill", why, "suggested a threshold for a physical problem")
