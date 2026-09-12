@@ -287,6 +287,18 @@ class WhyNothingTest(unittest.TestCase):
         self.assertIn("minimum", why)
         self.assertIn("--min-size", why)
 
+    def test_a_dark_backing_is_named_when_prints_will_not_separate(self) -> None:
+        # With the white mat out of the lid a print's own shadows read as
+        # background, the mask fills with holes, and nothing comes out
+        # rectangular. No threshold fixes that, so do not suggest one.
+        rng = np.random.default_rng(8)
+        bed = np.full((int(11 * DPI), int(8.5 * DPI), 3), 55, np.uint8)
+        block = rng.integers(0, 255, (int(4 * DPI), int(3 * DPI), 3)).astype(np.uint8)
+        bed[int(0.5 * DPI) : int(4.5 * DPI), int(0.5 * DPI) : int(3.5 * DPI)] = block
+        why = explain_nothing_found(bed, DPI, min_side_in=1.0, min_fill=0.95)
+        self.assertIn("white mat", why)
+        self.assertNotIn("--min-fill", why, "suggested a threshold for a physical problem")
+
     def test_an_empty_bed_says_so(self) -> None:
         blank = np.full((600, 500, 3), 242, np.uint8)
         path = self.dir / "blank.png"

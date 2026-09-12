@@ -167,6 +167,9 @@ def _normalise(rect) -> tuple[tuple[float, float], tuple[float, float], float]:
     return (cx, cy), (w, h), angle
 
 
+DARK_BACKING = 90  # below this the lid is not backing a print with anything
+
+
 def explain_nothing_found(
     bgr: np.ndarray, dpi: float, min_side_in: float = 1.0, min_fill: float = 0.62
 ) -> str:
@@ -193,6 +196,18 @@ def explain_nothing_found(
             f" {min_side_in:g} in minimum — try --min-size {max(0.3, min(across, down) * 0.8):.1f}"
         )
     if fill < min_fill:
+        # A dark background is right for film in a holder and wrong for prints
+        # on a lid: the shadows inside a photograph then read as background,
+        # the mask fills with holes, and no blob comes out rectangular. No
+        # threshold fixes that; the white mat does.
+        if float(np.mean(background)) < DARK_BACKING:
+            return (
+                f"the largest thing found is {across:.1f}x{down:.1f} in but only"
+                f" {fill:.0%} rectangular, and the background is dark"
+                f" ({float(np.mean(background)):.0f}) — if these are prints, the"
+                " white mat should be in the lid, or their shadows read as"
+                " background"
+            )
         return (
             f"the largest thing found is {across:.1f}x{down:.1f} in but only"
             f" {fill:.0%} rectangular, so photos are probably touching — leave a"
