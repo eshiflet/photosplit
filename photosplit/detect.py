@@ -167,6 +167,43 @@ def _normalise(rect) -> tuple[tuple[float, float], tuple[float, float], float]:
     return (cx, cy), (w, h), angle
 
 
+def explain_nothing_found(
+    bgr: np.ndarray, dpi: float, min_side_in: float = 1.0, min_fill: float = 0.62
+) -> str:
+    """Why a scan with photographs on it came back with none.
+
+    "No photos found — try --preview, or lower --min-size" is a guess, and on a
+    bed of four touching prints it points at the wrong setting entirely. The
+    mask knows what was nearly accepted; say that instead.
+    """
+    background = background_color(bgr)
+    mask = foreground_mask(bgr, background, dpi).astype(np.uint8)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    if count < 2:
+        return "nothing stood out from the background at all — is the lid closed?"
+
+    biggest = max(range(1, count), key=lambda i: stats[i, cv2.CC_STAT_AREA])
+    x, y, w, h, area = stats[biggest]
+    fill = area / max(1.0, float(w * h))
+    across, down = w / dpi, h / dpi
+
+    if min(across, down) < min_side_in:
+        return (
+            f"the largest thing found is {across:.1f}x{down:.1f} in, under the"
+            f" {min_side_in:g} in minimum — try --min-size {max(0.3, min(across, down) * 0.8):.1f}"
+        )
+    if fill < min_fill:
+        return (
+            f"the largest thing found is {across:.1f}x{down:.1f} in but only"
+            f" {fill:.0%} rectangular, so photos are probably touching — leave a"
+            f" gap between them, or try --min-fill {max(0.3, fill * 0.9):.1f}"
+        )
+    return (
+        f"the largest thing found is {across:.1f}x{down:.1f} in and {fill:.0%}"
+        " rectangular — try --preview to see what was detected"
+    )
+
+
 def find_photos(
     bgr: np.ndarray,
     dpi: float,

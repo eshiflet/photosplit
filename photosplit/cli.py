@@ -81,7 +81,17 @@ def process(path: Path, args: argparse.Namespace) -> int:
     label = f"{path.name} [{result.dpi:g} dpi]"
 
     if not result.count:
-        print(f"{label}: no photos found — try --preview, or lower --min-size")
+        from photosplit.detect import explain_nothing_found
+        from photosplit.split import eight_bit, load_scan
+
+        try:
+            bgr, dpi = load_scan(path, args.dpi)
+            why = explain_nothing_found(
+                eight_bit(bgr), dpi, options.min_size, options.min_fill
+            )
+        except Exception:
+            why = "try --preview, or lower --min-size"
+        print(f"{label}: no photos found — {why}")
         return 0
 
     if result.preview_path and not args.dry_run:

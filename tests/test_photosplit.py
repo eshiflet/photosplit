@@ -13,7 +13,7 @@ from PIL import Image
 
 from photosplit import extract
 from photosplit.cli import main
-from photosplit.detect import find_photos
+from photosplit.detect import explain_nothing_found, find_photos
 from photosplit.split import SplitOptions, eight_bit, load_scan, split_scan
 from tests.make_scan import BLEEDING, SEPARATED, TOUCHING, make
 
@@ -245,6 +245,61 @@ class NeutraliseTest(unittest.TestCase):
             b = cv2.imread(str(untouched)).reshape(-1, 3).mean(axis=0)
             # Red was the channel held down, so it is the one that comes back.
             self.assertGreater(a[2], b[2])
+
+
+class WhyNothingTest(unittest.TestCase):
+    """A scan with photographs on it that finds none should say what it saw."""
+
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp(prefix="photosplit-why-"))
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+
+    @staticmethod
+    def elbow() -> np.ndarray:
+        """Two prints meeting at a corner, as they do on a packed bed.
+
+        The blob is an L, so its bounding box is mostly empty and no amount of
+        lowering --min-size will accept it. This is what four prints pushed
+        together actually produced on a real scan.
+        """
+        rng = np.random.default_rng(5)
+        bed = np.full((int(11 * DPI), int(8.5 * DPI), 3), 20, np.uint8)
+        for x0, y0, x1, y1 in (
+            (int(0.4 * DPI), int(0.4 * DPI), int(4.4 * DPI), int(3.4 * DPI)),
+            (int(0.4 * DPI), int(3.4 * DPI), int(3.4 * DPI), int(8.4 * DPI)),
+        ):
+            block = rng.integers(60, 230, (y1 - y0, x1 - x0, 3)).astype(np.uint8)
+            bed[y0:y1, x0:x1] = block
+        return bed
+
+    def test_touching_photos_are_named_as_the_reason(self) -> None:
+        # Pointing at --min-size, as it used to, sends someone to the wrong
+        # setting entirely: the blob is plenty big, it is the wrong shape.
+        why = explain_nothing_found(self.elbow(), DPI, min_side_in=1.0, min_fill=0.95)
+        self.assertIn("rectangular", why)
+        self.assertIn("touching", why)
+        self.assertIn("--min-fill", why)
+
+    def test_a_threshold_that_is_too_high_is_named_as_the_reason(self) -> None:
+        scan = self.dir / "small.png"
+        make(scan, SEPARATED)
+        why = explain_nothing_found(cv2.imread(str(scan)), DPI, min_side_in=9.0)
+        self.assertIn("minimum", why)
+        self.assertIn("--min-size", why)
+
+    def test_an_empty_bed_says_so(self) -> None:
+        blank = np.full((600, 500, 3), 242, np.uint8)
+        path = self.dir / "blank.png"
+        cv2.imwrite(str(path), blank)
+        why = explain_nothing_found(cv2.imread(str(path)), DPI)
+        self.assertIn("background", why)
+
+    def test_the_advice_names_a_setting_below_the_one_that_failed(self) -> None:
+        bgr = self.elbow()
+        why = explain_nothing_found(bgr, DPI, min_side_in=1.0, min_fill=0.95)
+        suggested = float(why.rsplit("--min-fill", 1)[1].strip())
+        self.assertLess(suggested, 0.95, "suggested a threshold no lower than the one that failed")
+        self.assertGreaterEqual(suggested, 0.3)
 
 
 class NoteTest(unittest.TestCase):

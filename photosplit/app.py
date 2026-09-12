@@ -380,6 +380,21 @@ class AppDelegate(NSObject):
             )
 
     @objc.python_method
+    def _why_nothing(self, result) -> str:
+        """What was nearly a photograph, rather than a guess at what to try."""
+        try:
+            from .detect import explain_nothing_found
+            from .split import eight_bit, load_scan
+
+            options = self.prefs.as_split_options()
+            bgr, dpi = load_scan(result.scan, options.dpi_override, keep_depth=True)
+            return explain_nothing_found(
+                eight_bit(bgr), dpi, options.min_size, options.min_fill
+            )
+        except Exception:
+            return "is the lid closed?"
+
+    @objc.python_method
     def _progress_line(self, percent: float) -> str:
         """What the scanner says, in the terms it actually reports.
 
@@ -568,7 +583,7 @@ class AppDelegate(NSObject):
     @objc.python_method
     def _report(self, result) -> None:
         if not result.count:
-            self._log("  no photos found — is the lid closed?")
+            self._log(f"  no photos found — {self._why_nothing(result)}")
             return
         clipped = 0
         for index, (photo, target) in enumerate(zip(result.photos, result.written), start=1):
