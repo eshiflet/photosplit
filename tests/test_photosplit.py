@@ -569,3 +569,56 @@ class CommandLineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EdgeReportTest(unittest.TestCase):
+    """Which boundary a print reached, and whether that is a problem."""
+
+    @staticmethod
+    def at(edges) -> object:
+        from photosplit.detect import Photo
+
+        return Photo((100.0, 100.0), (300.0, 400.0), 0.0, 1.0, bool(edges), tuple(edges))
+
+    def test_the_boundary_is_named(self) -> None:
+        from photosplit.detect import edge_report
+
+        lines = " ".join(edge_report([self.at(["left"])], DPI))
+        self.assertIn("left vertical", lines)
+        self.assertIn("cross", lines)
+
+    def test_more_than_one_boundary_is_named(self) -> None:
+        from photosplit.detect import edge_report
+
+        lines = " ".join(edge_report([self.at(["left", "bottom"])], DPI))
+        self.assertIn("left vertical", lines)
+        self.assertIn("bottom horizontal", lines)
+
+    def test_touching_an_alignment_lip_is_not_a_warning(self) -> None:
+        # A print pushed against the top lip is square, which is the point of
+        # the lip. Telling someone to move it would be telling them to make it
+        # crooked.
+        from photosplit.detect import edge_report
+
+        lines = " ".join(edge_report([self.at(["top"])], DPI))
+        self.assertIn("expected", lines)
+        self.assertNotIn("cross", lines)
+
+    def test_the_two_kinds_are_reported_separately(self) -> None:
+        from photosplit.detect import edge_report
+
+        lines = edge_report([self.at(["top"]), self.at(["left"])], DPI)
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(any("cross" in line for line in lines))
+        self.assertTrue(any("expected" in line for line in lines))
+
+    def test_photographs_well_inside_the_bed_say_nothing(self) -> None:
+        from photosplit.detect import edge_report
+
+        self.assertEqual(edge_report([self.at([])], DPI), [])
+
+    def test_each_photograph_is_numbered_in_the_message(self) -> None:
+        from photosplit.detect import edge_report
+
+        lines = " ".join(edge_report([self.at([]), self.at(["left"]), self.at(["left"])], DPI))
+        self.assertIn("photos 2, 3", lines)

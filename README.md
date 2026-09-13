@@ -113,6 +113,25 @@ so 600 dpi is the default rather than 1200.
   are handled, but a gap makes it certain.
 - Prints do not need to be square to the glass; skew up to 45° is corrected.
 - Close the lid. The white backing is what tells Photosplit where a photo stops.
+When a print reaches a boundary, Photosplit names which one:
+
+```
+Prints appear to cross the left vertical (photos 1, 3) boundary. Move them in
+  and rescan if anything is missing from the edge.
+Touching the top horizontal (photo 2) boundary, which is the lip a print is
+  squared against — expected, and no cause to rescan.
+```
+
+Two of a flatbed's edges are the lips a print is pushed against to square it
+up, so touching those is the point rather than a problem. The other two have
+nothing to stop a print sliding past them, and those are the ones worth
+checking.
+
+It cannot tell you whether a print is merely touching a boundary or hanging
+over it. Both put picture in the last row of pixels and nothing in the image
+says whether more of it was waiting outside, so the judgement is left to
+whoever can see the glass.
+
 - **The scannable area is usually smaller than the glass.** Most flatbeds stop
   at Letter or A4 even though the plate extends past the markers, so a print
   sitting on glass beyond them is simply out of reach — of any software. Keep

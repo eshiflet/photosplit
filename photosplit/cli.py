@@ -120,10 +120,10 @@ def process(path: Path, args: argparse.Namespace) -> int:
             print(f"  ** {finding.path.name} may be wrong: {finding.detail}")
 
     if reached:
-        print(
-            f"  note: {reached} photo(s) reach the edge of the scan area and may be"
-            " incomplete. The scannable area is often smaller than the glass."
-        )
+        from photosplit.detect import edge_report
+
+        for line in edge_report(result.photos, result.dpi):
+            print(f"  {line}")
     return len(result.written)
 
 
