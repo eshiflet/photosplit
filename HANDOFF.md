@@ -60,6 +60,12 @@ back and flags blanks, near-black, blown, crushed and fragments; both front
 ends put a line in the log, and `tools/check_scans.py` audits a folder. This
 exists because every failure here has written files and reported success.
 
+**The scan is mirrored against the view from above.** A print lies face down,
+so the sensor images it from underneath: scan-left is the physical right. Every
+edge named to a person goes through `detect.as_seen` first. Getting this wrong
+is not theoretical — the edge warning shipped backwards for one commit, telling
+someone to move prints that were correctly squared against the lip.
+
 ## Traps worth knowing
 
 - **A film scan that never starts is almost always the document mat.** The

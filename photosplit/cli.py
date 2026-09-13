@@ -97,6 +97,8 @@ def process(path: Path, args: argparse.Namespace) -> int:
 
     if result.preview_path and not args.dry_run:
         print(f"{label}: preview -> {result.preview_path}")
+    if result.map_path and not args.dry_run:
+        print(f"{label}: bed map -> {result.map_path}")
     print(f"{label}: {result.count} photo(s)")
 
     reached = sum(1 for p in result.photos if p.clipped)

@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from . import diagram as diagram_module
 from . import dust as dust_module
 from . import upright as upright_module
 from . import extract, film, negative
@@ -63,6 +64,7 @@ class SplitResult:
     written: list[Path] = field(default_factory=list)
     turned: dict[str, int] = field(default_factory=dict)
     preview_path: Path | None = None
+    map_path: Path | None = None
 
     @property
     def count(self) -> int:
@@ -152,6 +154,12 @@ def split_scan(
         result.preview_path = out_dir / f"{stem}-preview.jpg"
         if write:
             extract.save(extract.preview(view, photos), result.preview_path, dpi, quality=88)
+            # A plan of the bed as the person at the scanner sees it, so the
+            # numbers in any message about photo 3 mean something.
+            result.map_path = out_dir / f"{stem}-bed.png"
+            extract.save(
+                diagram_module.bed_map(photos, view.shape, dpi), result.map_path, dpi
+            )
 
     for index, photo in enumerate(photos, start=1):
         target = out_dir / f"{stem}-{index:02d}.{options.fmt}"

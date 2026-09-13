@@ -127,6 +127,13 @@ up, so touching those is the point rather than a problem. The other two have
 nothing to stop a print sliding past them, and those are the ones worth
 checking.
 
+With `--preview` it also writes `<scan>-bed.png`: a plan of the glass with a
+numbered box where each photograph lay, drawn **as you see it looking down at
+the scanner**, with the alignment lips marked. The scan itself is mirrored
+against that view — a print lies face down, so the sensor images it from
+underneath — and everything reported to a person is turned back, or the numbers
+send you to the wrong side of the bed.
+
 It cannot tell you whether a print is merely touching a boundary or hanging
 over it. Both put picture in the last row of pixels and nothing in the image
 says whether more of it was waiting outside, so the judgement is left to
@@ -348,6 +355,7 @@ including one, edge rise, that looks like a measure of sharpness and is not.
 | `photosplit/blank.py` | Measures an empty bed: dirt, vignetting, colour cast |
 | `photosplit/review.py` | Reads written crops back and says which look wrong |
 | `photosplit/upright.py` | Decides which way up a photograph goes, from its faces |
+| `photosplit/diagram.py` | Draws the bed, so a message about photo 3 can be acted on |
 | `photosplit/dust.py` | Finds dust and fills it in |
 | `photosplit/extract.py` | Rotates, crops, trims, saves; draws the preview |
 | `photosplit/split.py` | The scan-to-files step, shared by the app and the CLI |

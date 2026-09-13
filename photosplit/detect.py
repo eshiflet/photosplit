@@ -181,14 +181,29 @@ DARK_BACKING = 90  # below this the lid is not backing a print with anything
 
 # Two edges of a flatbed are the lips a print is pushed against to square it
 # up, so a print touching those is aligned rather than in trouble. The other
-# two have nothing to stop a print sliding past them.
+# two have nothing to stop a print sliding past them. Named as the person at
+# the scanner sees them, looking down at the glass.
 ALIGNMENT_LIPS = ("top", "right")
+
+# A print lies face down, so the sensor images it from underneath and the scan
+# comes back mirrored left to right against the view from above. Everything
+# reported to a person has to be turned back, or it sends them to the wrong
+# side of the bed — which is a mistake this made before anyone drew the bed.
+MIRRORED = True
+
 EDGE_NAMES = {
     "left": "left vertical",
     "right": "right vertical",
     "top": "top horizontal",
     "bottom": "bottom horizontal",
 }
+
+
+def as_seen(edge: str) -> str:
+    """A scan edge named as the person looking down at the glass sees it."""
+    if not MIRRORED:
+        return edge
+    return {"left": "right", "right": "left"}.get(edge, edge)
 
 
 def edge_report(photos, dpi: float) -> list[str]:
@@ -205,8 +220,9 @@ def edge_report(photos, dpi: float) -> list[str]:
     aligned: dict[str, list[int]] = {}
     for index, photo in enumerate(photos, start=1):
         for edge in getattr(photo, "edges", ()):
-            bucket = aligned if edge in ALIGNMENT_LIPS else at_risk
-            bucket.setdefault(edge, []).append(index)
+            seen = as_seen(edge)
+            bucket = aligned if seen in ALIGNMENT_LIPS else at_risk
+            bucket.setdefault(seen, []).append(index)
 
     def phrase(where: dict[str, list[int]]) -> str:
         return ", ".join(
