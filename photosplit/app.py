@@ -599,6 +599,8 @@ class AppDelegate(NSObject):
 
             for line in edge_report(result.photos, result.dpi):
                 self._log(f"  {line}")
+            if result.map_path:
+                self._log(f"  which photo is which: {result.map_path.name}")
 
     @objc.python_method
     def _split_finished(self, written: list[Path], reveal: bool) -> None:

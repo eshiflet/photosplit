@@ -154,12 +154,13 @@ def split_scan(
         result.preview_path = out_dir / f"{stem}-preview.jpg"
         if write:
             extract.save(extract.preview(view, photos), result.preview_path, dpi, quality=88)
-            # A plan of the bed as the person at the scanner sees it, so the
-            # numbers in any message about photo 3 mean something.
-            result.map_path = out_dir / f"{stem}-bed.png"
-            extract.save(
-                diagram_module.bed_map(photos, view.shape, dpi), result.map_path, dpi
-            )
+
+    # The bed map is written whenever anything reached a boundary, whether or
+    # not previews are wanted: that is exactly when a message naming photo 3
+    # needs a way to say which one photo 3 is. It is a few kilobytes.
+    if write and (options.preview or any(p.clipped for p in photos)):
+        result.map_path = out_dir / f"{stem}-bed.png"
+        extract.save(diagram_module.bed_map(photos, view.shape, dpi), result.map_path, dpi)
 
     for index, photo in enumerate(photos, start=1):
         target = out_dir / f"{stem}-{index:02d}.{options.fmt}"

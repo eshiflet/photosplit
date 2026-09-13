@@ -127,7 +127,8 @@ up, so touching those is the point rather than a problem. The other two have
 nothing to stop a print sliding past them, and those are the ones worth
 checking.
 
-With `--preview` it also writes `<scan>-bed.png`: a plan of the glass with a
+It writes `<scan>-bed.png` whenever anything reaches a boundary, and with
+`--preview` always: a plan of the glass with a
 numbered box where each photograph lay, drawn **as you see it looking down at
 the scanner**, with the alignment lips marked. The scan itself is mirrored
 against that view — a print lies face down, so the sensor images it from

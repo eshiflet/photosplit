@@ -591,7 +591,7 @@ class EdgeReportTest(unittest.TestCase):
 
         lines = " ".join(edge_report([self.at(["right"])], DPI))
         self.assertIn("left vertical", lines)
-        self.assertIn("cross", lines)
+        self.assertIn("reach", lines)
 
     def test_more_than_one_boundary_is_named(self) -> None:
         from photosplit.detect import edge_report
@@ -607,7 +607,7 @@ class EdgeReportTest(unittest.TestCase):
         lines = " ".join(edge_report([self.at(["left"])], DPI))
         self.assertIn("right vertical", lines)
         self.assertIn("expected", lines)
-        self.assertNotIn("cross", lines)
+        self.assertNotIn("overhanging", lines)
 
     def test_touching_an_alignment_lip_is_not_a_warning(self) -> None:
         # A print pushed against the top lip is square, which is the point of
@@ -617,14 +617,14 @@ class EdgeReportTest(unittest.TestCase):
 
         lines = " ".join(edge_report([self.at(["top"])], DPI))
         self.assertIn("expected", lines)
-        self.assertNotIn("cross", lines)
+        self.assertNotIn("overhanging", lines)
 
     def test_the_two_kinds_are_reported_separately(self) -> None:
         from photosplit.detect import edge_report
 
         lines = edge_report([self.at(["top"]), self.at(["right"])], DPI)
         self.assertEqual(len(lines), 2)
-        self.assertTrue(any("cross" in line for line in lines))
+        self.assertTrue(any("overhanging" in line for line in lines))
         self.assertTrue(any("expected" in line for line in lines))
 
     def test_photographs_well_inside_the_bed_say_nothing(self) -> None:

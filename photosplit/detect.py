@@ -232,9 +232,13 @@ def edge_report(photos, dpi: float) -> list[str]:
 
     lines = []
     if at_risk:
+        # Not an accusation. On a bed that reaches the full glass a print
+        # cannot slide past an edge, and touching one costs nothing; the two
+        # cases look identical in the image, so say what was seen and let
+        # whoever can look at the glass decide.
         lines.append(
-            f"Prints appear to cross the {phrase(at_risk)} boundary."
-            " Move them in and rescan if anything is missing from the edge."
+            f"Prints reach the {phrase(at_risk)} boundary."
+            " Worth a glance at those edges if a print was overhanging the glass."
         )
     if aligned:
         lines.append(
