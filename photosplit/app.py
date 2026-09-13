@@ -15,6 +15,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+import cv2
 import objc
 from AppKit import (
     NSAlert,
@@ -31,6 +32,9 @@ from AppKit import (
     NSFontAttributeName,
     NSForegroundColorAttributeName,
     NSMakeRect,
+    NSImage,
+    NSImageScaleProportionallyUpOrDown,
+    NSImageView,
     NSMenu,
     NSMenuItem,
     NSOpenPanel,
@@ -49,7 +53,7 @@ from AppKit import (
     NSWindowStyleMaskTitled,
     NSWorkspace,
 )
-from Foundation import NSAttributedString, NSObject, NSOperationQueue, NSTimer
+from Foundation import NSAttributedString, NSData, NSObject, NSOperationQueue, NSTimer
 
 from . import __version__
 from . import blank as blank_module
@@ -229,10 +233,17 @@ class AppDelegate(NSObject):
         self.status = label("", NSMakeRect(24, 298, 472, 18), secondary=True)
         view.addSubview_(self.status)
 
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 96, 472, 194))
+        self.bed_view = NSImageView.alloc().initWithFrame_(NSMakeRect(386, 96, 110, 194))
+        self.bed_view.setImageScaling_(NSImageScaleProportionallyUpOrDown)
+        self.bed_view.setToolTip_(
+            "Where each photograph lay on the glass, as you look down at it."
+        )
+        view.addSubview_(self.bed_view)
+
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 96, 352, 194))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(2)
-        self.log_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 472, 194))
+        self.log_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 352, 194))
         self.log_view.setEditable_(False)
         self.log_view.setFont_(NSFont.monospacedSystemFontOfSize_weight_(11, 0))
         # Without these the log is black-on-black the moment the Mac is in dark mode.
@@ -378,6 +389,21 @@ class AppDelegate(NSObject):
             self.session.give_up(
                 f"No image after {waited / 60:.0f} minutes. The scanner never started."
             )
+
+    @objc.python_method
+    def _show_bed(self, bed) -> None:
+        """Put the plan of the glass in the window, or take it away."""
+        if bed is None:
+            self.bed_view.setImage_(None)
+            return
+        try:
+            ok, buffer = cv2.imencode(".png", bed)
+            if not ok:
+                return
+            data = NSData.dataWithBytes_length_(buffer.tobytes(), buffer.size)
+            self.bed_view.setImage_(NSImage.alloc().initWithData_(data))
+        except Exception:
+            pass  # a picture that will not draw must not cost someone their scan
 
     @objc.python_method
     def _why_nothing(self, result) -> str:
@@ -583,25 +609,29 @@ class AppDelegate(NSObject):
     @objc.python_method
     def _report(self, result) -> None:
         if not result.count:
+            self._show_bed(None)
             self._log(f"  no photos found — {self._why_nothing(result)}")
             return
-        clipped = 0
+        # The plan of the bed goes up first, so that every "Photo 3" below it
+        # has something to point at.
+        self._show_bed(result.bed)
         for index, (photo, target) in enumerate(zip(result.photos, result.written), start=1):
             w = photo.size[0] / result.dpi
             h = photo.size[1] / result.dpi
-            note = ""
-            if photo.clipped:
-                clipped += 1
-                note = "   << reaches the edge of the scan area"
-            self._log(f"  {index:2d}. {w:4.1f} x {h:4.1f} in   {target.name}{note}")
-        if clipped:
-            from .detect import edge_report
+            self._log(f"  {index:2d}. {w:4.1f} x {h:4.1f} in   {target.name}")
+            for line in self._turns(index, photo, result.turned.get(target.name)):
+                self._log(f"      {line}")
 
-            for line in edge_report(result.photos, result.dpi):
-                self._log(f"  {line}")
-            if result.map_path:
-                self._log(f"  which photo is which: {result.map_path.name}")
-
+    @objc.python_method
+    def _turns(self, index: int, photo, quarters: int | None) -> list[str]:
+        """What was done to a photograph's angle, said plainly and by number."""
+        said = []
+        if quarters:
+            said.append(f"Photo {index} was rotated {quarters} degrees")
+        if abs(photo.angle) >= 0.5:
+            said.append(f"Photo {index} was straightened {abs(photo.angle):.0f}°"
+                        f" — it was lying {'anticlockwise' if photo.angle > 0 else 'clockwise'}")
+        return said
     @objc.python_method
     def _split_finished(self, written: list[Path], reveal: bool) -> None:
         self._set_busy(False, f"{len(written)} photo(s) saved")

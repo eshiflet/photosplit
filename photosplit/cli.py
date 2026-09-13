@@ -97,17 +97,12 @@ def process(path: Path, args: argparse.Namespace) -> int:
 
     if result.preview_path and not args.dry_run:
         print(f"{label}: preview -> {result.preview_path}")
-    if result.map_path and not args.dry_run:
-        print(f"{label}: bed map -> {result.map_path}")
     print(f"{label}: {result.count} photo(s)")
 
-    reached = sum(1 for p in result.photos if p.clipped)
     for photo, target in zip(result.photos, result.written):
         w_in, h_in = photo.size[0] / result.dpi, photo.size[1] / result.dpi
         number = result.written.index(target) + 1
         detail = f"  {number:2d}. {w_in:.1f}x{h_in:.1f} in  skew {photo.angle:+.2f}°"
-        if photo.clipped:
-            detail += "  ** reaches the edge of the scan area **"
         turned = result.turned.get(target.name)
         if turned:
             detail += f"  turned {turned}°"
@@ -121,11 +116,6 @@ def process(path: Path, args: argparse.Namespace) -> int:
         for finding in review(result.written, result.dpi):
             print(f"  ** {finding.path.name} may be wrong: {finding.detail}")
 
-    if reached:
-        from photosplit.detect import edge_report
-
-        for line in edge_report(result.photos, result.dpi):
-            print(f"  {line}")
     return len(result.written)
 
 

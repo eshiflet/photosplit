@@ -721,3 +721,55 @@ class PreferencesTest(AppTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BedAndTurnsTest(AppTestCase):
+    """The plan of the glass, and saying what happened to each photograph."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.delegate = build_delegate()
+
+    @staticmethod
+    def photo(angle: float = 0.0):
+        from photosplit.detect import Photo
+
+        return Photo((100.0, 100.0), (300.0, 400.0), angle, 1.0)
+
+    def test_the_window_has_somewhere_to_show_the_bed(self) -> None:
+        self.assertIsNotNone(self.delegate.bed_view)
+        self.assertIsNone(self.delegate.bed_view.image(), "showing a bed before any scan")
+
+    def test_a_bed_reaches_the_window(self) -> None:
+        import numpy as np
+
+        from photosplit.diagram import bed_map
+
+        drawn = bed_map([self.photo()], (1200, 900), 300)
+        self.delegate._show_bed(drawn)
+        self.assertIsNotNone(self.delegate.bed_view.image(), "the bed did not reach the window")
+
+    def test_a_scan_that_found_nothing_clears_the_bed(self) -> None:
+        from photosplit.diagram import bed_map
+
+        self.delegate._show_bed(bed_map([self.photo()], (1200, 900), 300))
+        self.delegate._show_bed(None)
+        self.assertIsNone(self.delegate.bed_view.image())
+
+    def test_a_quarter_turn_is_reported_by_number(self) -> None:
+        said = self.delegate._turns(3, self.photo(), 90)
+        self.assertEqual(said, ["Photo 3 was rotated 90 degrees"])
+
+    def test_a_straightening_is_reported_by_number(self) -> None:
+        said = " ".join(self.delegate._turns(2, self.photo(angle=2.4), None))
+        self.assertIn("Photo 2 was straightened", said)
+        self.assertIn("2", said)
+
+    def test_both_are_reported_when_both_happened(self) -> None:
+        said = self.delegate._turns(1, self.photo(angle=-3.0), 270)
+        self.assertEqual(len(said), 2)
+        self.assertTrue(any("rotated 270" in line for line in said))
+        self.assertTrue(any("straightened" in line for line in said))
+
+    def test_a_photograph_that_was_already_square_says_nothing(self) -> None:
+        self.assertEqual(self.delegate._turns(1, self.photo(angle=0.1), None), [])

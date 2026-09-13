@@ -64,7 +64,10 @@ class SplitResult:
     written: list[Path] = field(default_factory=list)
     turned: dict[str, int] = field(default_factory=dict)
     preview_path: Path | None = None
-    map_path: Path | None = None
+    # The bed as the person at the scanner sees it, kept in memory for the
+    # window to show. It is a key to the numbering, not an output: writing it
+    # beside the photographs would only leave something to tidy up.
+    bed: "np.ndarray | None" = None
 
     @property
     def count(self) -> int:
@@ -134,6 +137,7 @@ def split_scan(
     result = SplitResult(scan=path, dpi=dpi, photos=photos)
     if not photos:
         return result
+    result.bed = diagram_module.bed_map(photos, view.shape, dpi)
 
     if options.neutralise:
         # Correct the whole scan once, so the preview shows what the crops get.
@@ -155,12 +159,6 @@ def split_scan(
         if write:
             extract.save(extract.preview(view, photos), result.preview_path, dpi, quality=88)
 
-    # The bed map is written whenever anything reached a boundary, whether or
-    # not previews are wanted: that is exactly when a message naming photo 3
-    # needs a way to say which one photo 3 is. It is a few kilobytes.
-    if write and (options.preview or any(p.clipped for p in photos)):
-        result.map_path = out_dir / f"{stem}-bed.png"
-        extract.save(diagram_module.bed_map(photos, view.shape, dpi), result.map_path, dpi)
 
     for index, photo in enumerate(photos, start=1):
         target = out_dir / f"{stem}-{index:02d}.{options.fmt}"

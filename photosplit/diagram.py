@@ -47,14 +47,12 @@ def bed_map(
     # Mark the lips, which is what makes the drawing orientable at a glance:
     # they are the edges the person can feel on the actual scanner.
     for edge in lips:
-        # The lips are already named as the viewer sees them.
-        shown = edge
         a, b = {
             "top": ((x0, y0), (x1, y0)),
             "bottom": ((x0, y1), (x1, y1)),
             "left": ((x0, y0), (x0, y1)),
             "right": ((x1, y0), (x1, y1)),
-        }[shown]
+        }[edge]
         cv2.line(canvas, a, b, LIP, 6)
 
     for index, photo in enumerate(photos, start=1):
@@ -64,11 +62,8 @@ def bed_map(
             angle = -angle
         box = cv2.boxPoints(((cx * scale + x0, cy * scale + y0), (w * scale, h * scale), angle))
         corners = box.astype(np.int32)
-        from .detect import as_seen
-
-        risky = any(as_seen(e) not in lips for e in getattr(photo, "edges", ()))
         cv2.fillPoly(canvas, [corners], BOX)
-        cv2.polylines(canvas, [corners], True, WARN if risky else INK, 2)
+        cv2.polylines(canvas, [corners], True, INK, 2)
 
         label = str(index)
         size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)

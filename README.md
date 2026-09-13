@@ -96,6 +96,12 @@ calibration will tell you which you did.
 Files are named by the moment they were scanned, so nothing ever overwrites
 anything: `2026-08-26-143205-01.png`, `-02`, and so on.
 
+After a scan the window shows a plan of the glass beside the log, with a
+numbered box where each photograph lay, drawn as you see it looking down at the
+scanner. Messages name photographs by that number — "Photo 3 was rotated 90
+degrees" — so there is never any doubt which one is meant. It is a key to the
+numbering rather than an output, so it is not written to the folder.
+
 You can also drop scans you already have onto the app icon, and they are split
 with the same settings. Your originals are left alone.
 
@@ -113,38 +119,10 @@ so 600 dpi is the default rather than 1200.
   are handled, but a gap makes it certain.
 - Prints do not need to be square to the glass; skew up to 45° is corrected.
 - Close the lid. The white backing is what tells Photosplit where a photo stops.
-When a print reaches a boundary, Photosplit names which one:
-
-```
-Prints appear to cross the left vertical (photos 1, 3) boundary. Move them in
-  and rescan if anything is missing from the edge.
-Touching the top horizontal (photo 2) boundary, which is the lip a print is
-  squared against — expected, and no cause to rescan.
-```
-
-Two of a flatbed's edges are the lips a print is pushed against to square it
-up, so touching those is the point rather than a problem. The other two have
-nothing to stop a print sliding past them, and those are the ones worth
-checking.
-
-It writes `<scan>-bed.png` whenever anything reaches a boundary, and with
-`--preview` always: a plan of the glass with a
-numbered box where each photograph lay, drawn **as you see it looking down at
-the scanner**, with the alignment lips marked. The scan itself is mirrored
-against that view — a print lies face down, so the sensor images it from
-underneath — and everything reported to a person is turned back, or the numbers
-send you to the wrong side of the bed.
-
-It cannot tell you whether a print is merely touching a boundary or hanging
-over it. Both put picture in the last row of pixels and nothing in the image
-says whether more of it was waiting outside, so the judgement is left to
-whoever can see the glass.
-
-- **The scannable area is usually smaller than the glass.** Most flatbeds stop
-  at Letter or A4 even though the plate extends past the markers, so a print
-  sitting on glass beyond them is simply out of reach — of any software. Keep
-  prints inside the markers, and scan fewer per pass rather than packing the
-  bed. Photosplit says so in its log when a photo reaches the edge.
+- **Check what your scanner can actually reach.** Some cover the whole plate
+  and some stop at Letter or A4, in which case a print sitting beyond the
+  markers is out of reach of any software. `tools/scanner_info.py` reports the
+  area yours will scan.
 
 To see exactly what your scanner can reach:
 

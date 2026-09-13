@@ -92,20 +92,6 @@ class DetectionTest(unittest.TestCase):
         self.assertEqual(len(photos), len(BLEEDING))
         self.assertGreater(min(background), 200, "lid should read as near-white")
 
-    def test_photos_reaching_the_scan_boundary_are_flagged(self) -> None:
-        # The scannable area is often smaller than the glass, so a print that
-        # was fully on the platen can still arrive cut off. Whether it actually
-        # is cannot be known from the scan; that it reaches the edge can.
-        scan = self.dir / "bleed.png"
-        make(scan, BLEEDING)
-        photos, _ = detect(scan)
-        self.assertTrue(all(p.clipped for p in photos))
-
-        tidy = self.dir / "scan.png"
-        make(tidy, SEPARATED)
-        photos, _ = detect(tidy)
-        self.assertFalse(any(p.clipped for p in photos))
-
     def test_reading_order_is_top_left_first(self) -> None:
         scan = self.dir / "scan.png"
         make(scan, SEPARATED)
@@ -547,11 +533,10 @@ class CommandLineTest(unittest.TestCase):
 
     def test_png_output_and_preview(self) -> None:
         main([str(self.scan), "-o", str(self.out), "-f", "png", "--preview"])
-        # The bed map is written alongside the preview and is not a photograph.
-        crops = [p for p in self.out.glob("family-*.png") if not p.stem.endswith("-bed")]
-        self.assertEqual(len(crops), 4)
+        self.assertEqual(len(list(self.out.glob("family-*.png"))), 4)
         self.assertTrue((self.out / "family-preview.jpg").exists())
-        self.assertTrue((self.out / "family-bed.png").exists())
+        # The bed plan is for the window, not the output folder.
+        self.assertFalse((self.out / "family-bed.png").exists())
 
     def test_a_folder_of_scans_is_processed_as_a_batch(self) -> None:
         make(self.dir / "second.png", TOUCHING)
@@ -574,79 +559,14 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class EdgeReportTest(unittest.TestCase):
-    """Which boundary a print reached, and whether that is a problem."""
-
-    @staticmethod
-    def at(edges) -> object:
-        from photosplit.detect import Photo
-
-        return Photo((100.0, 100.0), (300.0, 400.0), 0.0, 1.0, bool(edges), tuple(edges))
-
-    def test_the_boundary_is_named_as_the_viewer_sees_it(self) -> None:
-        # Scan-right is the viewer's left, because a print lies face down and
-        # the scan comes back mirrored. Reporting the scan's own name sends
-        # someone to the wrong side of the bed.
-        from photosplit.detect import edge_report
-
-        lines = " ".join(edge_report([self.at(["right"])], DPI))
-        self.assertIn("left vertical", lines)
-        self.assertIn("reach", lines)
-
-    def test_more_than_one_boundary_is_named(self) -> None:
-        from photosplit.detect import edge_report
-
-        lines = " ".join(edge_report([self.at(["right", "bottom"])], DPI))
-        self.assertIn("left vertical", lines)
-        self.assertIn("bottom horizontal", lines)
-
-    def test_the_lip_a_print_is_squared_against_is_not_a_warning(self) -> None:
-        # Scan-left is the physical right, which is a lip.
-        from photosplit.detect import edge_report
-
-        lines = " ".join(edge_report([self.at(["left"])], DPI))
-        self.assertIn("right vertical", lines)
-        self.assertIn("expected", lines)
-        self.assertNotIn("overhanging", lines)
-
-    def test_touching_an_alignment_lip_is_not_a_warning(self) -> None:
-        # A print pushed against the top lip is square, which is the point of
-        # the lip. Telling someone to move it would be telling them to make it
-        # crooked.
-        from photosplit.detect import edge_report
-
-        lines = " ".join(edge_report([self.at(["top"])], DPI))
-        self.assertIn("expected", lines)
-        self.assertNotIn("overhanging", lines)
-
-    def test_the_two_kinds_are_reported_separately(self) -> None:
-        from photosplit.detect import edge_report
-
-        lines = edge_report([self.at(["top"]), self.at(["right"])], DPI)
-        self.assertEqual(len(lines), 2)
-        self.assertTrue(any("overhanging" in line for line in lines))
-        self.assertTrue(any("expected" in line for line in lines))
-
-    def test_photographs_well_inside_the_bed_say_nothing(self) -> None:
-        from photosplit.detect import edge_report
-
-        self.assertEqual(edge_report([self.at([])], DPI), [])
-
-    def test_each_photograph_is_numbered_in_the_message(self) -> None:
-        from photosplit.detect import edge_report
-
-        lines = " ".join(edge_report([self.at([]), self.at(["right"]), self.at(["right"])], DPI))
-        self.assertIn("photos 2, 3", lines)
-
-
 class BedMapTest(unittest.TestCase):
     """A plan of the glass, so a message about photo 3 can be acted on."""
 
     @staticmethod
-    def photo_at(x, y, w=300.0, h=400.0, edges=()):
+    def photo_at(x, y, w=300.0, h=400.0):
         from photosplit.detect import Photo
 
-        return Photo((x, y), (w, h), 0.0, 1.0, bool(edges), tuple(edges))
+        return Photo((x, y), (w, h), 0.0, 1.0)
 
     def test_a_photograph_on_the_left_of_the_scan_is_drawn_on_the_right(self) -> None:
         # A print lies face down, so the scan is mirrored against the view from
@@ -673,14 +593,3 @@ class BedMapTest(unittest.TestCase):
 
         drawn = bed_map([], (1200, 1000), DPI)
         self.assertEqual(drawn.shape[2], 3)
-
-    def test_a_print_against_a_lip_is_not_drawn_as_a_problem(self) -> None:
-        # Scan-left is the physical right, which is a lip: that is alignment,
-        # not trouble, and the drawing must not contradict the message.
-        from photosplit.diagram import bed_map
-
-        lip = bed_map([self.photo_at(200.0, 500.0, edges=("left",))], (1200, 1000), DPI)
-        loose = bed_map([self.photo_at(500.0, 1150.0, edges=("bottom",))], (1200, 1000), DPI)
-        def redness(img):
-            return int((img[..., 2].astype(int) - img[..., 1].astype(int) > 80).sum())
-        self.assertLess(redness(lip), redness(loose))

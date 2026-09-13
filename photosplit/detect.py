@@ -19,8 +19,6 @@ class Photo:
     size: tuple[float, float]  # width, height after deskew
     angle: float  # degrees to rotate the scan by to make this photo upright
     fill: float  # contour area / rect area, 1.0 for a perfect rectangle
-    clipped: bool = False  # runs into the edge of the scannable area
-    edges: tuple[str, ...] = ()  # which boundaries it runs into, if any
 
     @property
     def area(self) -> float:
@@ -139,32 +137,6 @@ def _kernel(size: int) -> np.ndarray:
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
 
 
-def _touched_edges(cx, cy, w, h, angle, shape, slack: int = 3) -> tuple[str, ...]:
-    """Which boundaries of the scanned area this rectangle runs into.
-
-    The bed is often smaller than the glass, so a print that looked fully on
-    the platen can still be cut off. Saying which edge beats saying only that
-    one of them was reached: two of a flatbed's edges are the alignment lips a
-    print is meant to be pushed against, and the other two are not.
-
-    What this cannot tell you is whether the print is merely touching the
-    boundary or hanging over it. Both look identical — content running to the
-    last pixel — and nothing in the image distinguishes them.
-    """
-    height, width = shape
-    box = cv2.boxPoints(((cx, cy), (w, h), angle))
-    edges = []
-    if box[:, 0].min() <= slack:
-        edges.append("left")
-    if box[:, 0].max() >= width - 1 - slack:
-        edges.append("right")
-    if box[:, 1].min() <= slack:
-        edges.append("top")
-    if box[:, 1].max() >= height - 1 - slack:
-        edges.append("bottom")
-    return tuple(edges)
-
-
 def _normalise(rect) -> tuple[tuple[float, float], tuple[float, float], float]:
     """Re-express a minAreaRect so the rotation needed is at most 45 degrees."""
     (cx, cy), (w, h), angle = rect
@@ -178,74 +150,6 @@ def _normalise(rect) -> tuple[tuple[float, float], tuple[float, float], float]:
 
 
 DARK_BACKING = 90  # below this the lid is not backing a print with anything
-
-# Two edges of a flatbed are the lips a print is pushed against to square it
-# up, so a print touching those is aligned rather than in trouble. The other
-# two have nothing to stop a print sliding past them. Named as the person at
-# the scanner sees them, looking down at the glass.
-ALIGNMENT_LIPS = ("top", "right")
-
-# A print lies face down, so the sensor images it from underneath and the scan
-# comes back mirrored left to right against the view from above. Everything
-# reported to a person has to be turned back, or it sends them to the wrong
-# side of the bed — which is a mistake this made before anyone drew the bed.
-MIRRORED = True
-
-EDGE_NAMES = {
-    "left": "left vertical",
-    "right": "right vertical",
-    "top": "top horizontal",
-    "bottom": "bottom horizontal",
-}
-
-
-def as_seen(edge: str) -> str:
-    """A scan edge named as the person looking down at the glass sees it."""
-    if not MIRRORED:
-        return edge
-    return {"left": "right", "right": "left"}.get(edge, edge)
-
-
-def edge_report(photos, dpi: float) -> list[str]:
-    """What to say about photographs that reach the boundary.
-
-    Touching is not the same as crossing and the two cannot be told apart:
-    both put picture in the last row of pixels, and nothing in the image says
-    whether more of it was waiting outside. So this reports which boundary was
-    reached and leaves the judgement where it belongs, with whoever can see
-    the glass — while separating the edges where touching is the point from
-    the edges where it is a warning.
-    """
-    at_risk: dict[str, list[int]] = {}
-    aligned: dict[str, list[int]] = {}
-    for index, photo in enumerate(photos, start=1):
-        for edge in getattr(photo, "edges", ()):
-            seen = as_seen(edge)
-            bucket = aligned if seen in ALIGNMENT_LIPS else at_risk
-            bucket.setdefault(seen, []).append(index)
-
-    def phrase(where: dict[str, list[int]]) -> str:
-        return ", ".join(
-            f"{EDGE_NAMES[edge]} (photo{'s' if len(n) > 1 else ''} {', '.join(map(str, n))})"
-            for edge, n in sorted(where.items())
-        )
-
-    lines = []
-    if at_risk:
-        # Not an accusation. On a bed that reaches the full glass a print
-        # cannot slide past an edge, and touching one costs nothing; the two
-        # cases look identical in the image, so say what was seen and let
-        # whoever can look at the glass decide.
-        lines.append(
-            f"Prints reach the {phrase(at_risk)} boundary."
-            " Worth a glance at those edges if a print was overhanging the glass."
-        )
-    if aligned:
-        lines.append(
-            f"Touching the {phrase(aligned)} boundary, which is the lip a print"
-            " is squared against — expected, and no cause to rescan."
-        )
-    return lines
 
 
 def explain_nothing_found(
@@ -353,8 +257,6 @@ def find_photos(
                 size=(w / scale, h / scale),
                 angle=angle,
                 fill=fill,
-                edges=(touched := _touched_edges(cx, cy, w, h, angle, work.shape[:2])),
-                clipped=bool(touched),
             )
         )
 
