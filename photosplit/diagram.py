@@ -15,7 +15,9 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-WIDE = 520  # the drawing is a diagram, not an image; this is plenty
+# Drawn near the size it is shown at. A big canvas squeezed into a small view
+# throws away exactly the detail that matters here, which is the numbers.
+WIDE = 300
 PAPER = (252, 252, 252)
 INK = (60, 60, 60)
 BOX = (210, 228, 245)
@@ -36,7 +38,7 @@ def bed_map(
         return np.full((10, 10, 3), PAPER, np.uint8)
 
     scale = WIDE / width
-    pad = 34
+    pad = 14
     canvas = np.full(
         (int(height * scale) + pad * 2, int(width * scale) + pad * 2, 3), PAPER, np.uint8
     )
@@ -65,18 +67,22 @@ def bed_map(
         cv2.fillPoly(canvas, [corners], BOX)
         cv2.polylines(canvas, [corners], True, INK, 2)
 
+        # Sized to the box it sits in rather than fixed, so the number is
+        # readable whatever the photograph's size or the scale of the drawing.
         label = str(index)
-        size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-        cv2.putText(
-            canvas, label,
-            (int(cx * scale + x0 - size[0] / 2), int(cy * scale + y0 + size[1] / 2)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.8, INK, 2, cv2.LINE_AA,
-        )
+        room = min(abs(w), abs(h)) * scale
+        font = max(0.7, min(room / 42.0, 2.2))
+        weight = max(2, int(round(font * 1.6)))
+        size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font, weight)
+        origin = (int(cx * scale + x0 - size[0] / 2), int(cy * scale + y0 + size[1] / 2))
+        # A pale halo, so a number stays legible over a dark box or an edge.
+        cv2.putText(canvas, label, origin, cv2.FONT_HERSHEY_SIMPLEX, font,
+                    PAPER, weight + 3, cv2.LINE_AA)
+        cv2.putText(canvas, label, origin, cv2.FONT_HERSHEY_SIMPLEX, font,
+                    INK, weight, cv2.LINE_AA)
 
-    cv2.putText(
-        canvas, "looking down at the glass; green edges are the lips",
-        (x0, canvas.shape[0] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.42, INK, 1, cv2.LINE_AA,
-    )
+    # No caption. At the size this is shown it would be three pixels tall,
+    # which is not writing, it is texture. The view carries a tooltip instead.
     return canvas
 
 

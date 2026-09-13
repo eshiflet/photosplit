@@ -588,6 +588,23 @@ class BedMapTest(unittest.TestCase):
         drawn = bed_map(photos, (1200, 1400), DPI)
         self.assertGreater(int((cv2.cvtColor(drawn, cv2.COLOR_BGR2GRAY) < 120).sum()), 300)
 
+    def test_the_numbers_are_big_enough_to_read_at_the_size_shown(self) -> None:
+        # The plan is drawn at one size and shown at about 110 px wide. Ink
+        # that survives that is readable; ink that does not is texture.
+        from photosplit.diagram import bed_map
+
+        drawn = bed_map([self.photo_at(500.0, 700.0, 700.0, 900.0)], (1600, 1200), DPI)
+        scale = 110 / drawn.shape[1]
+        shown = cv2.resize(
+            drawn, (110, int(drawn.shape[0] * scale)), interpolation=cv2.INTER_AREA
+        )
+        grey = cv2.cvtColor(shown, cv2.COLOR_BGR2GRAY)
+        # The digit sits in the middle of the box; look only there, so the
+        # outline of the box cannot be mistaken for it.
+        h, w = grey.shape
+        middle = grey[int(h * 0.35) : int(h * 0.65), int(w * 0.3) : int(w * 0.7)]
+        self.assertGreater(int((middle < 130).sum()), 25, "the number vanished when shown")
+
     def test_it_survives_a_bed_with_nothing_on_it(self) -> None:
         from photosplit.diagram import bed_map
 
